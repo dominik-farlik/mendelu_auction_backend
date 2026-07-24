@@ -1,12 +1,11 @@
 from typing import List, TYPE_CHECKING
 
+from pydantic import BaseModel
 from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import Base
 from models.role import Role
-from models.user_group import user_group
-
 
 if TYPE_CHECKING:
     from models.product import Product
@@ -32,3 +31,14 @@ class User(Base):
         secondary="user_group",
         back_populates="members"
     )
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    first_name: str | None = None
+    last_name: str | None = None
+
+    class Config:
+        from_attributes = True

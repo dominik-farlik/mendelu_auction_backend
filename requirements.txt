@@ -25,3 +25,4 @@ itsdangerous
 httpx
 pyjwt
 pwdlib
+pydantic-settings

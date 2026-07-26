@@ -1,11 +1,17 @@
-from fastapi import FastAPI
+import logging
+
+from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
 from routers import auth
 
-app = FastAPI(title="MENDELU Auction API")
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
+app = FastAPI(title="MENDELU Auction API")
 
 origins = [
     "http://localhost:5173",
@@ -19,7 +25,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router)
+master_router = APIRouter(prefix="/api")
+
+master_router.include_router(auth.router)
+
+app.include_router(master_router)
 
 @app.get("/")
 def read_root():

@@ -16,11 +16,11 @@ class User(Base):
     __tablename__ = "user"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    username: Mapped[str] = mapped_column(String(50), unique=True)
+    username: Mapped[str | None] = mapped_column(String(50), unique=True)
     email: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     password: Mapped[str] = mapped_column(String(100), nullable=False)
-    first_name: Mapped[str | None] = mapped_column(String(50))
-    last_name: Mapped[str | None] = mapped_column(String(50))
+    first_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(50), nullable=False)
 
     role_id: Mapped[int] = mapped_column(ForeignKey("role.id"), default=1)
 
@@ -39,6 +39,16 @@ class UserResponse(BaseModel):
     email: str
     first_name: str | None = None
     last_name: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class UserUpdate(BaseModel):
+    email: str
+    first_name: str
+    last_name: str
+    username: str | None = None
 
     class Config:
         from_attributes = True

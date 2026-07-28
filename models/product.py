@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Optional, TYPE_CHECKING, List
 
-from sqlalchemy import String, Float, ForeignKey, DateTime, func, Enum as SQLEnum
+from sqlalchemy import String, Float, ForeignKey, DateTime, Boolean, func, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import Base
@@ -28,6 +28,7 @@ class Product(Base):
         SQLEnum(SaleType, native_enum=False),
         default=SaleType.AUCTION
     )
+    big_preview: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
     starting_price: Mapped[float] = mapped_column(Float)
     buy_now_price: Mapped[float| None] = mapped_column(Float)
     starts_at: Mapped[datetime | None] = mapped_column(DateTime)

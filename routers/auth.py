@@ -19,7 +19,7 @@ from models import User
 from models.user import UserResponse
 
 
-router = APIRouter(tags=["Auth"])
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
 password_hash = PasswordHash.recommended()
 DUMMY_HASH = password_hash.hash("dummypassword")
@@ -32,7 +32,7 @@ class Token(BaseModel):
 
 
 class TokenData(BaseModel):
-    username: str | None = None
+    email: str | None = None
 
 
 def verify_password(plain_password, hashed_password):
@@ -43,18 +43,18 @@ def get_password_hash(password):
     return password_hash.hash(password)
 
 
-def get_user(db: Session, username: str):
-    statement = select(User).where(User.username == username)
+def get_user(db: Session, email: str) -> User | None:
+    statement = select(User).where(User.email == email)
     return db.scalar(statement)
 
 
-def authenticate_user(db: Session, username: str, password: str):
-    user = get_user(db, username)
+def authenticate_user(db: Session, email: str, password: str) -> User | None:
+    user = get_user(db, email)
     if not user:
         verify_password(password, DUMMY_HASH)
-        return False
+        return None
     if not verify_password(password, user.password):
-        return False
+        return None
     return user
 
 
@@ -88,21 +88,21 @@ async def get_current_user(
 
     try:
         payload = jwt.decode(access_token, settings.SECRET_KEY, algorithms=[settings.PASSWORD_ALGORITHM])
-        username = payload.get("sub")
-        if username is None:
+        email = payload.get("sub")
+        if email is None:
             raise credentials_exception
-        token_data = TokenData(username=username)
+        token_data = TokenData(email=email)
     except InvalidTokenError:
         raise credentials_exception
 
-    user = get_user(db, token_data.username)
+    user = get_user(db, token_data.email)
     if user is None:
         raise credentials_exception
     return user
 
 
-@router.post("/token")
-async def login_for_access_token(
+@router.post("/login")
+async def login(
         response: Response,
         form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
         db: Session = Depends(get_db),
@@ -112,11 +112,11 @@ async def login_for_access_token(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect email or password",
         )
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username},
+        data={"sub": user.email},
         expires_delta=access_token_expires,
         settings=settings
     )
@@ -125,7 +125,7 @@ async def login_for_access_token(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=True,
+        secure=False,
         samesite="lax",
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
@@ -133,14 +133,9 @@ async def login_for_access_token(
     return {"message": "Logged in successfully"}
 
 
-@router.get("/users/me/", response_model=UserResponse)
+@router.get("/me/", response_model=UserResponse)
 async def read_users_me(current_user: Annotated[User, Depends(get_current_user)]):
     return current_user
-
-
-@router.get("/users/me/items/")
-async def read_own_items(current_user: Annotated[User, Depends(get_current_user)]):
-    return [{"item_id": "Foo", "owner": current_user.username}]
 
 
 @router.post("/logout")

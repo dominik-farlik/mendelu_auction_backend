@@ -1,7 +1,7 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status
+
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import select
 
 from database import get_db
 from models import User

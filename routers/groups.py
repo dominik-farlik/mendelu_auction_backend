@@ -63,7 +63,7 @@ async def create_group(
 
     new_group = Group(
         name=group_data.name,
-        organization_id=group_data.organization_id,
+        organization=group_data.organization,
         manager_id=current_user.id
     )
 

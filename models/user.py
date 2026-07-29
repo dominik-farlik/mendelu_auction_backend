@@ -1,15 +1,15 @@
 from typing import List, TYPE_CHECKING
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import Base
-from models.role import Role
+from models.role import Role, RoleResponse
 
 if TYPE_CHECKING:
     from models.product import Product
-    from models.group import Group
+    from models.group import Group, GroupBase
 
 
 class User(Base):
@@ -39,9 +39,9 @@ class UserResponse(BaseModel):
     email: str
     first_name: str | None = None
     last_name: str | None = None
+    role: RoleResponse
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserUpdate(BaseModel):
@@ -50,5 +50,4 @@ class UserUpdate(BaseModel):
     last_name: str
     username: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

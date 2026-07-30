@@ -9,7 +9,8 @@ from models.role import Role, RoleResponse
 
 if TYPE_CHECKING:
     from models.product import Product
-    from models.group import Group, GroupBase
+    from models.group import Group
+    from models.bid import Bid
 
 
 class User(Base):
@@ -25,12 +26,10 @@ class User(Base):
     role_id: Mapped[int] = mapped_column(ForeignKey("role.id"), default=1)
 
     role: Mapped["Role"] = relationship(back_populates="users")
-    products: Mapped[List["Product"]] = relationship(back_populates="owner")
+    created_products: Mapped[List["Product"]] = relationship(back_populates="owner")
     managed_groups: Mapped[List["Group"]] = relationship(back_populates="manager")
-    groups: Mapped[List["Group"]] = relationship(
-        secondary="user_group",
-        back_populates="members"
-    )
+    groups: Mapped[List["Group"]] = relationship(secondary="user_group", back_populates="members")
+    bids: Mapped[list["Bid"]] = relationship(back_populates="bidder", cascade="all, delete-orphan")
 
 
 class UserResponse(BaseModel):

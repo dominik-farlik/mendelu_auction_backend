@@ -9,6 +9,7 @@ from models import Base
 
 if TYPE_CHECKING:
     from models.user import User
+    from models.product import Product
 
 
 class Group(Base):
@@ -30,6 +31,7 @@ class Group(Base):
         secondary="user_group",
         back_populates="groups"
     )
+    products: Mapped[List["Product"]] = relationship(back_populates="group", cascade="all, delete-orphan")
 
 
 class GroupBase(BaseModel):

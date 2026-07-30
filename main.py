@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import auth, users, groups
+from routers import auth, users, groups, products
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,6 +29,7 @@ master_router = APIRouter(prefix="/api")
 master_router.include_router(auth.router)
 master_router.include_router(users.router)
 master_router.include_router(groups.router)
+master_router.include_router(products.router)
 
 app.include_router(master_router)
 

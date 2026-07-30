@@ -33,7 +33,6 @@ class User(Base):
 
 
 class UserBase(BaseModel):
-    id: int
     first_name: str
     last_name: str
 
@@ -41,15 +40,23 @@ class UserBase(BaseModel):
 
 
 class UserResponse(UserBase):
+    id: int
     email: str
-    username: str
+    username: str | None
     role: RoleResponse
 
 
+class UserCreate(UserBase):
+    email: str
+    password: str
+    username: str | None = None
+
+
 class UserUpdate(UserBase):
+    id: int
     email: str
     username: str | None = None
 
 
 class ManagerResponse(UserBase):
-    pass
+    id: int

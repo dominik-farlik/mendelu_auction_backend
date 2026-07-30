@@ -16,8 +16,7 @@ import config
 from config import get_settings
 from database import get_db
 from models import User
-from models.user import UserResponse
-
+from models.user import UserResponse, UserCreate
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -131,6 +130,35 @@ async def login(
     )
 
     return {"message": "Logged in successfully"}
+
+
+@router.post("/register", status_code=status.HTTP_201_CREATED, response_model=UserResponse)
+async def register(
+        user_data: UserCreate,
+        db: Session = Depends(get_db)
+):
+    existing_user = get_user(db, user_data.email)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User with this email already exists",
+        )
+
+    hashed_password = get_password_hash(user_data.password)
+
+    new_user = User(
+        email=user_data.email,
+        password=hashed_password,
+        first_name=user_data.first_name,
+        last_name=user_data.last_name,
+        username=user_data.username,
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return new_user
 
 
 @router.get("/me/", response_model=UserResponse)

@@ -6,6 +6,7 @@ from sqlalchemy import String, ForeignKey, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models import Base
+from models.user import ManagerResponse
 
 if TYPE_CHECKING:
     from models.user import User
@@ -51,6 +52,5 @@ class GroupUpdate(GroupBase):
 
 class GroupResponse(GroupBase):
     id: int
-    manager_id: int | None = None
+    manager: ManagerResponse
     created_at: datetime
-

@@ -26,27 +26,30 @@ class User(Base):
     role_id: Mapped[int] = mapped_column(ForeignKey("role.id"), default=1)
 
     role: Mapped["Role"] = relationship(back_populates="users")
-    created_products: Mapped[List["Product"]] = relationship(back_populates="owner")
+    created_products: Mapped[List["Product"]] = relationship(back_populates="created_by")
     managed_groups: Mapped[List["Group"]] = relationship(back_populates="manager")
     groups: Mapped[List["Group"]] = relationship(secondary="user_group", back_populates="members")
     bids: Mapped[list["Bid"]] = relationship(back_populates="bidder", cascade="all, delete-orphan")
 
 
-class UserResponse(BaseModel):
+class UserBase(BaseModel):
     id: int
-    username: str
-    email: str
-    first_name: str | None = None
-    last_name: str | None = None
-    role: RoleResponse
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class UserUpdate(BaseModel):
-    email: str
     first_name: str
     last_name: str
-    username: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserResponse(UserBase):
+    email: str
+    username: str
+    role: RoleResponse
+
+
+class UserUpdate(UserBase):
+    email: str
+    username: str | None = None
+
+
+class ManagerResponse(UserBase):
+    pass

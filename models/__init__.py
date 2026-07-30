@@ -5,3 +5,4 @@ from .user import User
 from .product import Product
 from .product_image import ProductImage
 from .user_group import user_group
+from .bid import Bid

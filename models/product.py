@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Optional, TYPE_CHECKING, List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import String, Float, ForeignKey, DateTime, Boolean, func, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -50,7 +50,7 @@ class Product(Base):
     created_by_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
     group_id: Mapped[int] = mapped_column(ForeignKey("group.id"), nullable=False)
 
-    created_by: Mapped["User"] = relationship(back_populates="products")
+    created_by: Mapped["User"] = relationship(back_populates="created_products")
     group: Mapped["Group"] = relationship(back_populates="products")
     images: Mapped[List["ProductImage"]] = relationship(back_populates="product")
     bids: Mapped[list["Bid"]] = relationship(back_populates="product", cascade="all, delete-orphan")
@@ -67,6 +67,8 @@ class ProductBase(BaseModel):
     starts_at: datetime
     ends_at: datetime
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 class ProductCreate(ProductBase):
     group_id: int
@@ -78,6 +80,3 @@ class ProductResponse(ProductBase):
     group_id: int
     created_at: datetime
     status: Status
-
-    class Config:
-        from_attributes = True

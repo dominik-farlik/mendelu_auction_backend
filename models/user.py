@@ -53,7 +53,6 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(UserBase):
-    id: int
     email: str
     username: str | None = None
 

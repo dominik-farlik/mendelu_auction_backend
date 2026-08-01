@@ -34,10 +34,7 @@ class Product(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(100))
     description: Mapped[Optional[str]]
-    sale_type: Mapped[SaleType] = mapped_column(
-        SQLEnum(SaleType, native_enum=False),
-        default=SaleType.AUCTION
-    )
+    sale_type: Mapped[SaleType] = mapped_column(String(20), default=SaleType.AUCTION)
     big_preview: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
     starting_price: Mapped[float] = mapped_column(Float)
     buy_now_price: Mapped[float| None] = mapped_column(Float)
@@ -53,7 +50,7 @@ class Product(Base):
     created_by: Mapped["User"] = relationship(back_populates="created_products")
     group: Mapped["Group"] = relationship(back_populates="products")
     images: Mapped[List["ProductImage"]] = relationship(back_populates="product")
-    bids: Mapped[list["Bid"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+    bids: Mapped[List["Bid"]] = relationship(back_populates="product", cascade="all, delete-orphan")
 
 
 class ProductBase(BaseModel):
@@ -70,6 +67,12 @@ class ProductBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ProductImageResponse(BaseModel):
+    filename: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ProductCreate(ProductBase):
     group_id: int
 
@@ -80,3 +83,4 @@ class ProductResponse(ProductBase):
     group_id: int
     created_at: datetime
     status: Status
+    images: List[ProductImageResponse] = []

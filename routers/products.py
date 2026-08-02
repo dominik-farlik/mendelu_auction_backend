@@ -1,6 +1,6 @@
 import json
-from datetime import datetime
-from typing import List, Optional
+from datetime import datetime, UTC
+from typing import List, Optional, Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Form, UploadFile, File
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -117,8 +117,8 @@ async def get_products(
         only_active: bool = True,
         db: Session = Depends(get_db)
 ):
-    """Získání seznamu produktů, které aktuálně probíhají."""
-    now = datetime.utcnow()
+    """Získání seznamu produktů"""
+    now = datetime.now(UTC)
     query = select(Product)
 
     if only_active:
@@ -130,6 +130,24 @@ async def get_products(
 
     result = db.execute(query.offset(skip).limit(limit))
     return result.scalars().all()
+
+
+@router.get("/group/{group_id}", response_model=List[ProductResponse])
+async def get_products_by_group(
+        group_id: int,
+        current_user: Annotated[User, Depends(get_current_user)],
+        db: Session = Depends(get_db),
+):
+    """Získá všechny produkty patřící do specifikované skupiny."""
+
+    group = db.get(Group, group_id)
+    if not group:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Skupina s ID {group_id} nebyla nalezena."
+        )
+
+    return group.products
 
 
 @router.get("/{product_id}", response_model=ProductResponse)

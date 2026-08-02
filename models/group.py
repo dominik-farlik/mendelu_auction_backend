@@ -55,3 +55,7 @@ class GroupResponse(GroupBase):
     members: List[UserResponse] | None = None
     manager: ManagerResponse
     created_at: datetime
+
+
+class AddMember(BaseModel):
+    email: str

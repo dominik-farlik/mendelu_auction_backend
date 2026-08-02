@@ -129,7 +129,7 @@ async def login(
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
 
-    return {"message": "Logged in successfully"}
+    return {"message": "Přihlášení bylo úspěšné."}
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED, response_model=UserResponse)

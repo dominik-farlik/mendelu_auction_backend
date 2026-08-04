@@ -1,13 +1,14 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import ForeignKey, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models import Base
 
 if TYPE_CHECKING:
-    from models.user import User
+    from models.user import User, UserResponse
     from models.product import Product
 
 
@@ -27,3 +28,16 @@ class Bid(Base):
 
     bidder: Mapped["User"] = relationship(back_populates="bids")
     product: Mapped["Product"] = relationship(back_populates="bids")
+
+
+class ProductBid(BaseModel):
+    bidder: UserResponse
+    amount: float
+
+    model_config = ConfigDict(from_attributes=True)
+
+class UserBid(BaseModel):
+    product: Product
+    amount: float
+
+    model_config = ConfigDict(from_attributes=True)

@@ -12,7 +12,7 @@ from models.group import GroupBase
 if TYPE_CHECKING:
     from models.user import User
     from models.product_image import ProductImage
-    from models.bid import Bid
+    from models.bid import Bid, ProductBid
     from models.group import Group
 
 
@@ -87,3 +87,9 @@ class ProductResponse(ProductBase):
     created_at: datetime
     status: Status
     images: List[ProductImageResponse] = []
+
+
+class ProductBidsResponse(BaseModel):
+    bids: list[ProductBid] = []
+
+    model_config = ConfigDict(from_attributes=True)

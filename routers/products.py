@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from dependencies import RoleChecker
 from models import ProductImage
-from models.product import Product, ProductResponse, ProductCreate, Status
+from models.product import Product, ProductResponse, ProductCreate, Status, ProductBidsResponse
 from models.group import Group
 from models.role import RoleEnum
 from models.user import User
@@ -165,3 +165,19 @@ async def get_product(
             detail="Produkt nebyl nalezen."
         )
     return product
+
+
+@router.get("/{product_id}/bids", response_model=ProductBidsResponse)
+async def get_product_bids(
+product_id: int,
+        db: Session = Depends(get_db)
+):
+    """Získání příhozů produktu"""
+    result = db.execute(select(Product).where(Product.id == product_id))
+    product = result.scalar_one_or_none()
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Produkt nebyl nalezen."
+        )
+    return product.bids

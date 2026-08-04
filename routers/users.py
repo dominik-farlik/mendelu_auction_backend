@@ -1,10 +1,12 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User
+from models import User, Product, Bid
+from models.bid import UserBid
 from models.user import UserResponse, UserUpdate
 from routers.auth import get_current_user
 
@@ -32,3 +34,43 @@ async def update_my_profile(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@router.post("/bid/{product_id}", response_model=UserBid, status_code=status.HTTP_201_CREATED)
+async def bid(
+        product_id: int,
+        amount: float,
+        current_user: Annotated[User, Depends(get_current_user)],
+        db: Session = Depends(get_db)
+):
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product not found"
+        )
+
+    highest_bid = db.query(Bid).filter(Bid.product_id == product_id).order_by(desc(Bid.amount)).first()
+
+    if highest_bid:
+        required_minimum = highest_bid.amount + product.min_bid
+    else:
+        required_minimum = getattr(product, 'starting_price', 0)
+
+    if amount < required_minimum:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Příhoz musí být alespoň {required_minimum} Kč"
+        )
+
+    new_bid = Bid(
+        amount=amount,
+        bidder_id=current_user.id,
+        product_id=product_id
+    )
+
+    db.add(new_bid)
+    db.commit()
+    db.refresh(new_bid)
+
+    return new_bid

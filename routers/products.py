@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from dependencies import RoleChecker
 from models import ProductImage
-from models.product import Product, ProductResponse, ProductCreate, Status, ProductBidsResponse
+from models.product import Product, ProductResponse, ProductCreate, Status, ProductBid
 from models.group import Group
 from models.role import RoleEnum
 from models.user import User
@@ -167,9 +167,9 @@ async def get_product(
     return product
 
 
-@router.get("/{product_id}/bids", response_model=ProductBidsResponse)
+@router.get("/{product_id}/bids", response_model=List[ProductBid])
 async def get_product_bids(
-product_id: int,
+        product_id: int,
         db: Session = Depends(get_db)
 ):
     """Získání příhozů produktu"""

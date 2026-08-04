@@ -8,11 +8,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import Base
 from models.group import GroupBase
+from models.user import UserResponse
 
 if TYPE_CHECKING:
     from models.user import User
     from models.product_image import ProductImage
-    from models.bid import Bid, ProductBid
+    from models.bid import Bid
     from models.group import Group
 
 
@@ -89,7 +90,8 @@ class ProductResponse(ProductBase):
     images: List[ProductImageResponse] = []
 
 
-class ProductBidsResponse(BaseModel):
-    bids: list[ProductBid] = []
+class ProductBid(BaseModel):
+    bidder: UserResponse
+    amount: float
 
     model_config = ConfigDict(from_attributes=True)

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import User, Product, Bid
-from models.bid import UserBid
+from models.bid import BidCreate
 from models.user import UserResponse, UserUpdate
 from routers.auth import get_current_user
 
@@ -36,10 +36,10 @@ async def update_my_profile(
     return current_user
 
 
-@router.post("/bid/{product_id}", response_model=UserBid, status_code=status.HTTP_201_CREATED)
+@router.post("/bid/{product_id}", status_code=status.HTTP_201_CREATED)
 async def bid(
         product_id: int,
-        amount: float,
+        bid_data: BidCreate,
         current_user: Annotated[User, Depends(get_current_user)],
         db: Session = Depends(get_db)
 ):
@@ -47,24 +47,26 @@ async def bid(
     if not product:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Product not found"
+            detail="Aukce nebyla nalezena"
         )
 
     highest_bid = db.query(Bid).filter(Bid.product_id == product_id).order_by(desc(Bid.amount)).first()
 
     if highest_bid:
-        required_minimum = highest_bid.amount + product.min_bid
+        required_minimum = highest_bid.amount
+        if product.min_bid:
+            required_minimum += product.min_bid
     else:
         required_minimum = getattr(product, 'starting_price', 0)
-
-    if amount < required_minimum:
+    print(required_minimum, product.min_bid)
+    if bid_data.amount < required_minimum:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Příhoz musí být alespoň {required_minimum} Kč"
         )
 
     new_bid = Bid(
-        amount=amount,
+        amount=bid_data.amount,
         bidder_id=current_user.id,
         product_id=product_id
     )
@@ -73,4 +75,4 @@ async def bid(
     db.commit()
     db.refresh(new_bid)
 
-    return new_bid
+    return {"message": "Přihození bylo úspěšné."}

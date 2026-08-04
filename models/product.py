@@ -39,6 +39,7 @@ class Product(Base):
     big_preview: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
     starting_price: Mapped[float] = mapped_column(Float)
     buy_now_price: Mapped[float| None] = mapped_column(Float)
+    min_bid: Mapped[float| None] = mapped_column(Float)
     starts_at: Mapped[datetime | None] = mapped_column(DateTime)
     ends_at: Mapped[datetime | None] = mapped_column(DateTime)
     cover_image: Mapped[Optional[str]] = mapped_column(String(255))
@@ -59,11 +60,12 @@ class ProductBase(BaseModel):
     description: Optional[str] = None
     starting_price: float = Field(..., gt=0)
     buy_now_price: Optional[float] = Field(None, gt=0)
+    min_bid: Optional[float] = Field(None, gt=0)
     cover_image: Optional[str] = Field(None, max_length=255)
     sale_type: SaleType = SaleType.AUCTION
     big_preview: bool = False
-    starts_at: datetime
-    ends_at: datetime
+    starts_at: Optional[datetime]
+    ends_at: Optional[datetime]
 
     model_config = ConfigDict(from_attributes=True)
 

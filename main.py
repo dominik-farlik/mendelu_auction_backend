@@ -1,7 +1,9 @@
 import logging
+import os
 
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from routers import auth, users, groups, products
 
@@ -23,6 +25,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+os.makedirs("static", exist_ok=True)
+
+# Namapování složky
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 master_router = APIRouter(prefix="/api")
 

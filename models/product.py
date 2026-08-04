@@ -3,10 +3,11 @@ from enum import StrEnum
 from typing import Optional, TYPE_CHECKING, List
 
 from pydantic import BaseModel, Field, ConfigDict
-from sqlalchemy import String, Float, ForeignKey, DateTime, Boolean, func, Enum as SQLEnum
+from sqlalchemy import String, Float, ForeignKey, DateTime, Boolean, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import Base
+from models.group import GroupBase
 
 if TYPE_CHECKING:
     from models.user import User
@@ -80,7 +81,7 @@ class ProductCreate(ProductBase):
 class ProductResponse(ProductBase):
     id: int
     created_by_id: int
-    group_id: int
+    group: GroupBase
     created_at: datetime
     status: Status
     images: List[ProductImageResponse] = []

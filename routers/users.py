@@ -1,3 +1,4 @@
+from datetime import datetime, UTC, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -49,6 +50,21 @@ async def bid(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Aukce nebyla nalezena"
+        )
+
+    starts_at = product.starts_at.replace(tzinfo=timezone.utc)
+    ends_at = product.ends_at.replace(tzinfo=timezone.utc)
+
+    if starts_at >= datetime.now(UTC):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Aukce ještě nezačala"
+        )
+
+    if ends_at <= datetime.now(UTC):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Aukce již skončila"
         )
 
     highest_bid = db.query(Bid).filter(Bid.product_id == product_id).order_by(desc(Bid.amount)).first()

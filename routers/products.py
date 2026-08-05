@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from dependencies import RoleChecker
-from models import ProductImage
+from models import ProductImage, Bid
 from models.product import Product, ProductResponse, ProductCreate, Status, ProductBid
 from models.group import Group
 from models.role import RoleEnum
@@ -180,4 +180,12 @@ async def get_product_bids(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Produkt nebyl nalezen."
         )
-    return product.bids
+
+    bids_result = db.execute(
+        select(Bid)
+        .where(Bid.product_id == product_id)
+        .order_by(Bid.amount.desc())
+    )
+    bids = bids_result.scalars().all()
+
+    return bids

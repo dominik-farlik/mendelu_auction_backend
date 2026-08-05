@@ -9,6 +9,7 @@ from models import User, Product, Bid
 from models.bid import BidCreate
 from models.user import UserResponse, UserUpdate
 from routers.auth import get_current_user
+from ws_manager import manager
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -58,7 +59,7 @@ async def bid(
             required_minimum += product.min_bid
     else:
         required_minimum = getattr(product, 'starting_price', 0)
-    print(required_minimum, product.min_bid)
+
     if bid_data.amount < required_minimum:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -74,5 +75,21 @@ async def bid(
     db.add(new_bid)
     db.commit()
     db.refresh(new_bid)
+
+    ws_payload = {
+        "type": "NEW_BID",
+        "payload": {
+            "id": new_bid.id,
+            "amount": new_bid.amount,
+            "bid_time": new_bid.bid_time.isoformat() if new_bid.bid_time else None,
+            "bidder_id": current_user.id,
+            "bidder": {
+                "first_name": current_user.first_name,
+                "last_name": current_user.last_name
+            }
+        }
+    }
+
+    await manager.broadcast_to_product(ws_payload, product_id)
 
     return {"message": "Přihození bylo úspěšné."}

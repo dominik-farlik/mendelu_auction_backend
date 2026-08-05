@@ -93,5 +93,6 @@ class ProductResponse(ProductBase):
 class ProductBid(BaseModel):
     bidder: UserResponse
     amount: float
+    bid_time: datetime
 
     model_config = ConfigDict(from_attributes=True)

@@ -41,7 +41,7 @@ class Product(Base):
     big_preview: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
     starting_price: Mapped[float] = mapped_column(Float)
     buy_now_price: Mapped[float| None] = mapped_column(Float)
-    min_bid: Mapped[float| None] = mapped_column(Float)
+    min_bid: Mapped[float| None] = mapped_column(Float, default=50)
     starts_at: Mapped[datetime | None] = mapped_column(DateTime)
     ends_at: Mapped[datetime | None] = mapped_column(DateTime)
     cover_image: Mapped[Optional[str]] = mapped_column(String(255))
@@ -90,7 +90,10 @@ class ProductResponse(ProductBase):
     created_at: datetime
     status: Status
     images: List[ProductImageResponse] = []
+    bids: List[ProductBid] = []
     is_followed: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProductBid(BaseModel):

@@ -166,10 +166,11 @@ async def get_product(
             detail="Produkt nebyl nalezen."
         )
 
+    product.bids = sorted(product.bids, key=lambda bid: bid.amount, reverse=True)
+
     is_followed = False
     if current_user:
         is_followed = any(follow.follower_id == current_user.id for follow in product.followers)
-
     setattr(product, "is_followed", is_followed)
 
     return product

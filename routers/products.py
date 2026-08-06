@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import get_db
-from dependencies import RoleChecker
+from dependencies import RoleChecker, get_current_user_optional
 from models import ProductImage, Bid
 from models.product import Product, ProductResponse, ProductCreate, Status, ProductBid
 from models.group import Group
@@ -153,6 +153,7 @@ async def get_products_by_group(
 @router.get("/{product_id}", response_model=ProductResponse)
 async def get_product(
         product_id: int,
+        current_user: Annotated[User, Depends(get_current_user_optional)],
         db: Session = Depends(get_db)
 ):
     """Získání detailu konkrétního produktu."""
@@ -164,6 +165,13 @@ async def get_product(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Produkt nebyl nalezen."
         )
+
+    is_followed = False
+    if current_user:
+        is_followed = any(follow.follower_id == current_user.id for follow in product.followers)
+
+    setattr(product, "is_followed", is_followed)
+
     return product
 
 

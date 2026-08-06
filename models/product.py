@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from models.product_image import ProductImage
     from models.bid import Bid
     from models.group import Group
+    from models.watchlist import Watchlist
 
 
 class SaleType(StrEnum):
@@ -54,6 +55,7 @@ class Product(Base):
     group: Mapped["Group"] = relationship(back_populates="products")
     images: Mapped[List["ProductImage"]] = relationship(back_populates="product")
     bids: Mapped[List["Bid"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+    followers: Mapped[list["Watchlist"]] = relationship(back_populates="product", cascade="all, delete-orphan")
 
 
 class ProductBase(BaseModel):
@@ -88,6 +90,7 @@ class ProductResponse(ProductBase):
     created_at: datetime
     status: Status
     images: List[ProductImageResponse] = []
+    is_followed: bool = False
 
 
 class ProductBid(BaseModel):

@@ -23,8 +23,8 @@ class Bid(Base):
         nullable=False
     )
 
-    bidder_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
-    product_id: Mapped[int] = mapped_column(ForeignKey("product.id"))
+    bidder_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"))
+    product_id: Mapped[int] = mapped_column(ForeignKey("product.id", ondelete="CASCADE"))
 
     bidder: Mapped["User"] = relationship(back_populates="bids")
     product: Mapped["Product"] = relationship(back_populates="bids")

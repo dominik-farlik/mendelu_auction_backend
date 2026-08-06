@@ -6,7 +6,7 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, Product, Bid
+from models import User, Product, Bid, Watchlist
 from models.bid import BidCreate
 from models.user import UserResponse, UserUpdate
 from routers.auth import get_current_user
@@ -109,3 +109,65 @@ async def bid(
     await manager.broadcast_to_product(ws_payload, product_id)
 
     return {"message": "Přihození bylo úspěšné."}
+
+
+@router.post("/follow/{product_id}", status_code=status.HTTP_201_CREATED)
+async def follow_product(
+        product_id: int,
+        current_user: Annotated[User, Depends(get_current_user)],
+        db: Session = Depends(get_db)
+):
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Produkt nebyl nalezen."
+        )
+
+    existing_follow = db.query(Watchlist).filter(
+        Watchlist.follower_id == current_user.id,
+        Watchlist.product_id == product_id
+    ).first()
+
+    if existing_follow:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tento produkt již sledujete."
+        )
+
+    new_follow = Watchlist(
+        follower_id=current_user.id,
+        product_id=product_id
+    )
+    db.add(new_follow)
+    db.commit()
+
+    return {"message": f"Začali jste sledovat produkt '{product.title}'."}
+
+
+@router.delete("/follow/{product_id}", status_code=status.HTTP_200_OK)
+async def unfollow_product(
+        product_id: int,
+        current_user: Annotated[User, Depends(get_current_user)],
+        db: Session = Depends(get_db)
+):
+    existing_follow = db.query(Watchlist).filter(
+        Watchlist.follower_id == current_user.id,
+        Watchlist.product_id == product_id
+    ).first()
+
+    if not existing_follow:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tento produkt aktuálně nesledujete."
+        )
+
+    db.delete(existing_follow)
+    db.commit()
+
+    return {"message": "Sledování produktu bylo zrušeno."}
+
+
+@router.get("/followed-products", status_code=status.HTTP_200_OK)
+async def get_followed_products(current_user: Annotated[User, Depends(get_current_user)]):
+    return current_user.followed_products

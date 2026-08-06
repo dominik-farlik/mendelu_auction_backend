@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from models.product import Product
     from models.group import Group
     from models.bid import Bid
+    from models.watchlist import Watchlist
 
 
 class User(Base):
@@ -30,6 +31,7 @@ class User(Base):
     managed_groups: Mapped[List["Group"]] = relationship(back_populates="manager")
     groups: Mapped[List["Group"]] = relationship(secondary="user_group", back_populates="members")
     bids: Mapped[list["Bid"]] = relationship(back_populates="bidder", cascade="all, delete-orphan")
+    followed_products: Mapped[list["Watchlist"]] = relationship(back_populates="follower", cascade="all, delete-orphan")
 
 
 class UserBase(BaseModel):

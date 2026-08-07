@@ -110,8 +110,12 @@ async def approve_product(
     return product
 
 
+from sqlalchemy.orm import selectinload
+
+
 @router.get("/", response_model=List[ProductResponse])
 async def get_products(
+        current_user: Annotated[User, Depends(get_current_user_optional)],
         skip: int = 0,
         limit: int = 10,
         only_active: bool = True,
@@ -119,7 +123,11 @@ async def get_products(
 ):
     """Získání seznamu produktů"""
     now = datetime.now(UTC)
-    query = select(Product)
+
+    query = select(Product).options(
+        selectinload(Product.bids),
+        selectinload(Product.followers)
+    )
 
     if only_active:
         query = query.where(
@@ -129,7 +137,16 @@ async def get_products(
         )
 
     result = db.execute(query.offset(skip).limit(limit))
-    return result.scalars().all()
+    products = result.scalars().all()
+
+    for product in products:
+        is_followed = False
+        if current_user:
+            is_followed = any(follow.follower_id == current_user.id for follow in product.followers)
+
+        setattr(product, "is_followed", is_followed)
+
+    return products
 
 
 @router.get("/group/{group_id}", response_model=List[ProductResponse])

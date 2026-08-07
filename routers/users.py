@@ -32,6 +32,7 @@ async def update_my_profile(
     current_user.email = user_update.email
     current_user.first_name = user_update.first_name
     current_user.last_name = user_update.last_name
+    current_user.public_last_name = user_update.public_last_name
 
     db.commit()
     db.refresh(current_user)
@@ -101,7 +102,8 @@ async def bid(
             "bidder_id": current_user.id,
             "bidder": {
                 "first_name": current_user.first_name,
-                "last_name": current_user.last_name
+                "last_name": current_user.last_name,
+                "public_last_name": current_user.public_last_name
             }
         }
     }

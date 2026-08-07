@@ -23,6 +23,7 @@ class User(Base):
     password: Mapped[str] = mapped_column(String(100), nullable=False)
     first_name: Mapped[str] = mapped_column(String(50), nullable=False)
     last_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    public_last_name: Mapped[bool] = mapped_column(default=False)
 
     role_id: Mapped[int] = mapped_column(ForeignKey("role.id"), default=1)
 
@@ -46,6 +47,7 @@ class UserResponse(UserBase):
     email: str
     username: str | None
     role: RoleResponse
+    public_last_name: bool
 
 
 class UserCreate(UserBase):
@@ -57,6 +59,7 @@ class UserCreate(UserBase):
 class UserUpdate(UserBase):
     email: str
     username: str | None = None
+    public_last_name: bool
 
 
 class ManagerResponse(UserBase):

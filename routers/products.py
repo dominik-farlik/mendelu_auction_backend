@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from dependencies import RoleChecker, get_current_user_optional
 from models import ProductImage, Bid
-from models.product import Product, ProductResponse, ProductCreate, Status, ProductBid
+from models.product import Product, ProductResponse, ProductCreate, Status, ProductBid, ProductUpdateStatus
 from models.group import Group
 from models.role import RoleEnum
 from models.user import User
@@ -76,9 +76,10 @@ async def create_product(
     return new_product
 
 
-@router.patch("/{product_id}/approve", response_model=ProductResponse)
-async def approve_product(
+@router.patch("/{product_id}/status", response_model=ProductResponse)
+async def update_product_status(
         product_id: int,
+        status_data: ProductUpdateStatus,
         current_user: User = Depends(allow_only_manager),
         db: Session = Depends(get_db),
 ):
@@ -94,16 +95,7 @@ async def approve_product(
             detail="Produkt nebyl nalezen."
         )
 
-    # TODO: Ověření, zda je přihlášený uživatel manažerem skupiny, kam produkt patří
-    # Např. porovnat current_user.id s product.group.manager_id
-
-    if product.status == Status.APPROVED:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Produkt již je schválen."
-        )
-
-    product.status = Status.APPROVED
+    product.status = status_data.status
     db.commit()
     db.refresh(product)
 

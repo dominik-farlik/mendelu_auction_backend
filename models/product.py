@@ -40,8 +40,8 @@ class Product(Base):
     sale_type: Mapped[SaleType] = mapped_column(String(20), default=SaleType.AUCTION)
     big_preview: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
     starting_price: Mapped[float] = mapped_column(Float)
-    buy_now_price: Mapped[float| None] = mapped_column(Float)
-    min_bid: Mapped[float| None] = mapped_column(Float, default=50)
+    buy_now_price: Mapped[float | None] = mapped_column(Float)
+    min_bid: Mapped[float | None] = mapped_column(Float, default=50)
     starts_at: Mapped[datetime | None] = mapped_column(DateTime)
     ends_at: Mapped[datetime | None] = mapped_column(DateTime)
     cover_image: Mapped[Optional[str]] = mapped_column(String(255))
@@ -102,3 +102,7 @@ class ProductBid(BaseModel):
     bid_time: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProductUpdateStatus(BaseModel):
+    status: Status

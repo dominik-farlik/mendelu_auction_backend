@@ -171,10 +171,6 @@ async def unfollow_product(
     return {"message": "Sledování produktu bylo zrušeno."}
 
 
-from sqlalchemy.orm import Session
-from fastapi import Depends
-
-
 @router.get("/followed-products", response_model=list[ProductResponse], status_code=status.HTTP_200_OK)
 async def get_followed_products(
         current_user: Annotated[User, Depends(get_current_user)],
@@ -189,5 +185,21 @@ async def get_followed_products(
 
     for product in products:
         setattr(product, "is_followed", True)
+
+    return products
+
+
+@router.get("/bidded-products", response_model=list[ProductResponse], status_code=status.HTTP_200_OK)
+async def get_bidded_products(
+        current_user: Annotated[User, Depends(get_current_user)],
+        db: Session = Depends(get_db)
+):
+    products = (
+        db.query(Product)
+        .join(Bid, Bid.product_id == Product.id)
+        .filter(Bid.bidder_id == current_user.id)
+        .distinct()
+        .all()
+    )
 
     return products

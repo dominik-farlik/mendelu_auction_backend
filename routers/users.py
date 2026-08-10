@@ -6,14 +6,18 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from database import get_db
+from dependencies import RoleChecker
 from models import User, Product, Bid, Watchlist
 from models.bid import BidCreate
 from models.product import ProductResponse
+from models.role import RoleEnum
 from models.user import UserResponse, UserUpdate
 from routers.auth import get_current_user
 from ws_manager import manager
 
 router = APIRouter(prefix="/users", tags=["Users"])
+
+allow_only_manager = RoleChecker([RoleEnum.MANAGER])
 
 
 @router.get("/me", response_model=UserResponse)
@@ -38,6 +42,17 @@ async def update_my_profile(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@router.get("/", response_model=list[UserResponse], dependencies=[Depends(allow_only_manager)])
+async def read_users(
+        skip: int = 0,
+        limit: int = 100,
+        db: Session = Depends(get_db)
+):
+    users = db.query(User).offset(skip).limit(limit).all()
+
+    return users
 
 
 @router.post("/bid/{product_id}", status_code=status.HTTP_201_CREATED)

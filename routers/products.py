@@ -4,7 +4,7 @@ from datetime import datetime, UTC
 from typing import List, Optional, Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Form, UploadFile, File
 from sqlalchemy import select, delete
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
 from dependencies import RoleChecker, get_current_user_optional
@@ -76,13 +76,16 @@ async def create_product(
     return new_product
 
 
-@router.patch("/{product_id}", response_model=ProductResponse, status_code=status.HTTP_200_OK)
+@router.patch("/{product_id}",
+              response_model=ProductResponse,
+              status_code=status.HTTP_200_OK,
+              dependencies=[Depends(allow_editor_or_manager)]
+              )
 async def update_product(
         product_id: int,
         product_data: str = Form(..., description="JSON řetězec odpovídající ProductCreate"),
         cover_image: Optional[UploadFile] = File(None, description="Nový hlavní úvodní obrázek"),
         additional_images: List[UploadFile] = File([], description="Seznam nových dalších obrázků"),
-        current_user: User = Depends(allow_editor_or_manager),
         db: Session = Depends(get_db)
 ):
     """
@@ -161,11 +164,10 @@ async def update_product(
     return product
 
 
-@router.patch("/{product_id}/status", response_model=ProductResponse)
+@router.patch("/{product_id}/status", response_model=ProductResponse, dependencies=[Depends(allow_only_manager)])
 async def update_product_status(
         product_id: int,
         status_data: ProductUpdateStatus,
-        current_user: User = Depends(allow_only_manager),
         db: Session = Depends(get_db),
 ):
     """
@@ -187,14 +189,11 @@ async def update_product_status(
     return product
 
 
-from sqlalchemy.orm import selectinload
-
-
 @router.get("/", response_model=List[ProductResponse])
 async def get_products(
         current_user: Annotated[User, Depends(get_current_user_optional)],
         skip: int = 0,
-        limit: int = 10,
+        limit: int = 100,
         only_active: bool = True,
         db: Session = Depends(get_db)
 ):
@@ -226,14 +225,12 @@ async def get_products(
     return products
 
 
-@router.get("/group/{group_id}", response_model=List[ProductResponse])
+@router.get("/group/{group_id}", response_model=List[ProductResponse], dependencies=[Depends(get_current_user)])
 async def get_products_by_group(
         group_id: int,
-        current_user: Annotated[User, Depends(get_current_user)],
         db: Session = Depends(get_db),
 ):
     """Získá všechny produkty patřící do specifikované skupiny."""
-
     group = db.get(Group, group_id)
     if not group:
         raise HTTPException(

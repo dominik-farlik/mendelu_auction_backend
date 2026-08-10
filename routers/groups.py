@@ -14,13 +14,11 @@ from models.user import User
 router = APIRouter(prefix="/groups", tags=["Groups"])
 
 allow_only_manager = RoleChecker([RoleEnum.MANAGER])
+allow_editor_or_manager = RoleChecker([RoleEnum.EDITOR, RoleEnum.MANAGER])
 
 
-@router.get("/", response_model=List[GroupResponse])
-async def get_groups(
-        current_user: Annotated[User, Depends(allow_only_manager)],
-        db: Session = Depends(get_db)
-):
+@router.get("/", response_model=List[GroupResponse], dependencies=[Depends(allow_only_manager)])
+async def get_groups(db: Session = Depends(get_db)):
     """Vrátí seznam všech skupin (pouze pro managery/adminy)."""
     statement = select(Group)
     groups = db.scalars(statement).all()
@@ -75,11 +73,10 @@ async def create_group(
     return new_group
 
 
-@router.put("/{group_id}", response_model=GroupResponse)
+@router.put("/{group_id}", response_model=GroupResponse, dependencies=[Depends(get_current_user)])
 async def update_group(
         group_id: int,
         group_data: GroupUpdate,
-        current_user: Annotated[User, Depends(get_current_user)],
         db: Session = Depends(get_db),
 ):
     """Aktualizuje existující skupinu."""
@@ -90,7 +87,6 @@ async def update_group(
             detail="Skupina nenalezena"
         )
 
-    # Aktualizujeme pouze pole, která byla v požadavku poslána
     update_data = group_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(group, key, value)
@@ -100,11 +96,10 @@ async def update_group(
     return group
 
 
-@router.post("/{group_id}/members")
+@router.post("/{group_id}/members", status_code=status.HTTP_200_OK, dependencies=[Depends(allow_editor_or_manager)])
 async def add_member_to_group(
         group_id: int,
         member_data: AddMember,
-        current_user: Annotated[User, Depends(get_current_user)],
         db: Session = Depends(get_db),
 ):
     """Přidá existujícího uživatele do skupiny podle jeho e-mailu."""
@@ -142,10 +137,9 @@ async def add_member_to_group(
     return {"message": "Uživatel byl úspěšně přidán do skupiny."}
 
 
-@router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(allow_only_manager)])
 async def delete_group(
         group_id: int,
-        current_user: Annotated[User, Depends(allow_only_manager)],
         db: Session = Depends(get_db),
 ):
     """Smaže skupinu podle ID."""

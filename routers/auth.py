@@ -31,7 +31,7 @@ class Token(BaseModel):
 
 
 class TokenData(BaseModel):
-    email: str | None = None
+    email: str
 
 
 def verify_password(plain_password, hashed_password):

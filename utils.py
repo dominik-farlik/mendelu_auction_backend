@@ -10,7 +10,7 @@ from config import get_settings
 settings = get_settings()
 
 
-def save_upload_file(file: Optional[UploadFile]) -> Optional[str]:
+def save_upload_file(file: Optional[UploadFile]) -> str:
     """Uloží nahraný soubor na disk a vrátí relativní cestu k němu."""
     if not file:
         return None

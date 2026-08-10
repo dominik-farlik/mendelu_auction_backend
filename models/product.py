@@ -31,12 +31,29 @@ class Status(StrEnum):
     CANCELLED = "cancelled"
 
 
+class Category(StrEnum):
+    AUTO_MOTO = "Auto-moto"
+    TRAVEL_AND_ACCOMMODATION = "Cestování a pobyty"
+    ELECTRONICS = "Elektronika"
+    MUSIC_AND_MOVIE = "Hudba a film"
+    FOOD = "Jídlo"
+    MERCH = "Merch"
+    FASHION = "Móda"
+    SERVICES = "SluŽby"
+    SPORT = "Sport"
+    ART = "Umění"
+    FUN = "Zábava"
+    EXPERIENCE = "Zážitky"
+    OTHER = "Jiné"
+
+
 class Product(Base):
     __tablename__ = "product"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(100))
     description: Mapped[Optional[str]]
+    category: Mapped[Category] = mapped_column(String(50), default=Category.OTHER)
     sale_type: Mapped[SaleType] = mapped_column(String(20), default=SaleType.AUCTION)
     big_preview: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
     starting_price: Mapped[float] = mapped_column(Float)
@@ -61,6 +78,7 @@ class Product(Base):
 class ProductBase(BaseModel):
     title: str = Field(..., max_length=100)
     description: Optional[str] = None
+    category: Category = Category.OTHER
     starting_price: float = Field(..., gt=0)
     buy_now_price: Optional[float] = Field(None, gt=0)
     min_bid: Optional[float] = Field(None, gt=0)

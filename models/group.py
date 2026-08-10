@@ -36,10 +36,9 @@ class Group(Base):
 
 
 class GroupBase(BaseModel):
+    id: int | None = None
     name: str
     organization: str | None = None
-
-    model_config = ConfigDict(from_attributes=True)
 
 
 class GroupCreate(GroupBase):
@@ -51,7 +50,6 @@ class GroupUpdate(GroupBase):
 
 
 class GroupResponse(GroupBase):
-    id: int
     members: List[UserResponse] | None = None
     manager: ManagerResponse
     created_at: datetime

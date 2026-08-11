@@ -76,7 +76,7 @@ async def create_product(
     return new_product
 
 
-@router.patch("/{product_id}",
+@router.put("/{product_id}",
               response_model=ProductResponse,
               status_code=status.HTTP_200_OK,
               dependencies=[Depends(allow_editor_or_manager)]

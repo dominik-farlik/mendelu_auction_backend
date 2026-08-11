@@ -44,6 +44,16 @@ async def update_my_profile(
     return current_user
 
 
+@router.get("/{user_id}", response_model=UserResponse)
+async def read_user(
+        user_id: int,
+        db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    return user
+
+
 @router.get("/", response_model=list[UserResponse], dependencies=[Depends(allow_only_manager)])
 async def read_users(
         skip: int = 0,

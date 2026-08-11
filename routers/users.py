@@ -2,15 +2,15 @@ from datetime import datetime, UTC, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import desc
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from database import get_db
 from dependencies import RoleChecker
-from models import User, Product, Bid, Watchlist
+from models import User, Product, Bid, Watchlist, Role
 from models.bid import BidCreate
 from models.product import ProductResponse
-from models.role import RoleEnum
+from models.role import RoleEnum, Role, RoleUpdate
 from models.user import UserResponse, UserUpdate
 from routers.auth import get_current_user
 from ws_manager import manager
@@ -63,6 +63,31 @@ async def read_users(
     users = db.query(User).offset(skip).limit(limit).all()
 
     return users
+
+
+@router.put("/{user_id}/role", response_model=UserResponse, dependencies=[Depends(allow_only_manager)])
+async def update_user_role(user_id: int, role_data: RoleUpdate, db: Session = Depends(get_db)):
+    user = db.scalar(select(User).where(User.id == user_id))
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Uživatel nebyl nalezen"
+        )
+
+    role = db.scalar(select(Role).where(Role.name == role_data.name))
+
+    if not role:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Role nebyla nalezena."
+        )
+
+    user.role_id = role.id
+    db.commit()
+    db.refresh(user)
+
+    return user
 
 
 @router.post("/bid/{product_id}", status_code=status.HTTP_201_CREATED)

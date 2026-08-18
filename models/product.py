@@ -18,12 +18,6 @@ if TYPE_CHECKING:
     from models.watchlist import Watchlist
 
 
-class SaleType(StrEnum):
-    AUCTION = "auction"
-    BUY_NOW = "buy_now"
-    BOTH = "both"
-
-
 class Status(StrEnum):
     ACTIVE = "active"
     PENDING = "pending"
@@ -55,7 +49,6 @@ class Product(Base):
     title: Mapped[str] = mapped_column(String(100))
     description: Mapped[Optional[str]]
     category: Mapped[Category] = mapped_column(String(50), default=Category.OTHER)
-    sale_type: Mapped[SaleType] = mapped_column(String(20), default=SaleType.AUCTION)
     big_preview: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
     starting_price: Mapped[float] = mapped_column(Float)
     buy_now_price: Mapped[float | None] = mapped_column(Float)
@@ -84,7 +77,6 @@ class ProductBase(BaseModel):
     buy_now_price: Optional[float] = Field(None, gt=0)
     min_bid: Optional[float] = Field(None, gt=0)
     cover_image: Optional[str] = Field(None, max_length=255)
-    sale_type: SaleType = SaleType.AUCTION
     big_preview: bool = False
     starts_at: Optional[datetime]
     ends_at: Optional[datetime]

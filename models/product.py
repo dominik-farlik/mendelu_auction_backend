@@ -50,7 +50,7 @@ class Product(Base):
     description: Mapped[Optional[str]]
     category: Mapped[Category] = mapped_column(String(50), default=Category.OTHER)
     big_preview: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
-    starting_price: Mapped[float] = mapped_column(Float)
+    starting_price: Mapped[float| None] = mapped_column(Float)
     buy_now_price: Mapped[float | None] = mapped_column(Float)
     min_bid: Mapped[float | None] = mapped_column(Float, default=50)
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -73,7 +73,7 @@ class ProductBase(BaseModel):
     title: str = Field(..., max_length=100)
     description: Optional[str] = None
     category: Category = Category.OTHER
-    starting_price: float = Field(..., gt=0)
+    starting_price: Optional[float] = Field(None, gt=0)
     buy_now_price: Optional[float] = Field(None, gt=0)
     min_bid: Optional[float] = Field(None, gt=0)
     cover_image: Optional[str] = Field(None, max_length=255)

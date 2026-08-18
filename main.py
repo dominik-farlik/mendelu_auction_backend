@@ -1,18 +1,27 @@
+import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from routers import auth, users, groups, products, ws
+from utils.auction_end_checker import auction_ender_task
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
-app = FastAPI(title="MENDELU Auction API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(auction_ender_task())
+    yield
+    task.cancel()
+
+app = FastAPI(title="MENDELU Auction API", lifespan=lifespan)
 
 origins = [
     "http://localhost:5173",
@@ -28,7 +37,6 @@ app.add_middleware(
 
 os.makedirs("static", exist_ok=True)
 
-# Namapování složky
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 master_router = APIRouter(prefix="/api")

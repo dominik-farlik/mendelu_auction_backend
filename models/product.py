@@ -29,6 +29,7 @@ class Status(StrEnum):
     PENDING = "pending"
     APPROVED = "approved"
     CANCELLED = "cancelled"
+    FINISHED = "finished"
 
 
 class Category(StrEnum):
@@ -59,10 +60,10 @@ class Product(Base):
     starting_price: Mapped[float] = mapped_column(Float)
     buy_now_price: Mapped[float | None] = mapped_column(Float)
     min_bid: Mapped[float | None] = mapped_column(Float, default=50)
-    starts_at: Mapped[datetime | None] = mapped_column(DateTime)
-    ends_at: Mapped[datetime | None] = mapped_column(DateTime)
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cover_image: Mapped[Optional[str]] = mapped_column(String(255))
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     status: Mapped[Status] = mapped_column(String(10), default=Status.PENDING, nullable=False)
 
     created_by_id: Mapped[int] = mapped_column(ForeignKey("user.id"))

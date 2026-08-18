@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime, UTC, timezone
+from datetime import datetime, UTC
 from typing import List, Optional, Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Form, UploadFile, File
 from sqlalchemy import select, delete, desc
@@ -15,7 +15,7 @@ from models.group import Group
 from models.role import RoleEnum
 from models.user import User
 from routers.auth import get_current_user
-from utils import save_upload_file
+from utils.save_file import save_upload_file
 from ws_manager import manager
 
 router = APIRouter(
@@ -209,7 +209,7 @@ async def get_products(
 
     if only_active:
         query = query.where(
-            Product.status == Status.APPROVED,
+            Product.status == Status.APPROVED.value,
             Product.starts_at <= now,
             Product.ends_at >= now
         )
@@ -307,16 +307,21 @@ async def bid(
             detail="Aukce nebyla nalezena"
         )
 
-    starts_at = product.starts_at.replace(tzinfo=timezone.utc)
-    ends_at = product.ends_at.replace(tzinfo=timezone.utc)
+    if product.status == Status.FINISHED.value:
+        raise HTTPException(status_code=409, detail="Aukce již skončila (vyhodnocuje se).")
 
-    if starts_at >= datetime.now(UTC):
+    if product.status != Status.APPROVED.value:
+        raise HTTPException(status_code=403, detail="Tato aukce není aktuálně spuštěná.")
+
+    now_utc = datetime.now(UTC)
+
+    if product.starts_at and product.starts_at >= now_utc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Aukce ještě nezačala"
         )
 
-    if ends_at <= datetime.now(UTC):
+    if product.ends_at and product.ends_at <= now_utc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Aukce již skončila"

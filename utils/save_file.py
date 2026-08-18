@@ -1,11 +1,11 @@
-from datetime import datetime, UTC
 import shutil
+from datetime import datetime, UTC
 from typing import Optional
 
-from fastapi import UploadFile, HTTPException, status
+from fastapi import UploadFile, HTTPException
+from starlette import status
 
 from config import get_settings
-
 
 settings = get_settings()
 

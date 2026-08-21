@@ -1,7 +1,7 @@
 from typing import List, TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import String, ForeignKey
+from sqlalchemy import String, ForeignKey, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import Base
@@ -24,6 +24,7 @@ class User(Base):
     first_name: Mapped[str] = mapped_column(String(50), nullable=False)
     last_name: Mapped[str] = mapped_column(String(50), nullable=False)
     public_last_name: Mapped[bool] = mapped_column(default=False)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
 
     role_id: Mapped[int] = mapped_column(ForeignKey("role.id"), default=1)
 

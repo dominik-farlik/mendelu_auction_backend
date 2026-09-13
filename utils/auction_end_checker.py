@@ -24,12 +24,22 @@ async def finalize_auction(product_id: int, db: Session):
     product.status = Status.FINISHED
     db.commit()
 
+    if product.buyer_id:
+        winner_id = product.buyer_id
+        final_price = getattr(product, "buy_now_price", None)
+        buy_now = True
+    else:
+        winner_id = highest_bid.bidder_id if highest_bid else None
+        final_price = highest_bid.amount if highest_bid else None
+        buy_now = False
+
     ws_payload = {
         "type": "AUCTION_ENDED",
         "payload": {
             "product_id": product_id,
-            "winner_id": highest_bid.bidder_id if highest_bid else None,
-            "final_price": highest_bid.amount if highest_bid else None,
+            "winner_id": winner_id,
+            "final_price": final_price,
+            "buy_now": buy_now,
             "message": "Aukce skončila!"
         }
     }
@@ -51,7 +61,7 @@ async def auction_ender_task():
 
             ended_products = db.query(Product).filter(
                 Product.ends_at <= now_utc,
-                Product.status == Status.APPROVED.value
+                Product.status == Status.APPROVED
             ).all()
 
             if ended_products:

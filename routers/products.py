@@ -15,6 +15,8 @@ from models.group import Group
 from models.role import RoleEnum
 from models.user import User
 from routers.auth import get_current_user
+from utils.auction_end_checker import finalize_auction
+from utils.auction_exceptions import check_auction_existence, check_auction_active
 from utils.save_file import save_upload_file
 from ws_manager import manager
 
@@ -97,11 +99,8 @@ async def update_product(
     """
 
     product = db.execute(select(Product).where(Product.id == product_id)).scalar_one_or_none()
-    if not product:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Produkt s ID {product_id} nebyl nalezen."
-        )
+
+    check_auction_existence(product)
 
     try:
         product_in = ProductCreate(**json.loads(product_data))
@@ -178,11 +177,7 @@ async def update_product_status(
     result = db.execute(select(Product).where(Product.id == product_id))
     product = result.scalar_one_or_none()
 
-    if not product:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Produkt nebyl nalezen."
-        )
+    check_auction_existence(product)
 
     product.status = status_data.status
     db.commit()
@@ -253,11 +248,7 @@ async def get_product(
     result = db.execute(select(Product).where(Product.id == product_id))
     product = result.scalar_one_or_none()
 
-    if not product:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Produkt nebyl nalezen."
-        )
+    check_auction_existence(product)
 
     product.bids = sorted(product.bids, key=lambda bid: bid.amount, reverse=True)
 
@@ -277,11 +268,8 @@ async def get_product_bids(
     """Získání příhozů produktu"""
     result = db.execute(select(Product).where(Product.id == product_id))
     product = result.scalar_one_or_none()
-    if not product:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Produkt nebyl nalezen."
-        )
+
+    check_auction_existence(product)
 
     bids_result = db.execute(
         select(Bid)
@@ -300,32 +288,11 @@ async def bid(
         current_user: Annotated[User, Depends(get_current_user)],
         db: Session = Depends(get_db)
 ):
-    product = db.query(Product).filter(Product.id == product_id).first()
-    if not product:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Aukce nebyla nalezena"
-        )
+    product = db.query(Product).filter(Product.id == product_id).with_for_update().first()
 
-    if product.status == Status.FINISHED.value:
-        raise HTTPException(status_code=409, detail="Aukce již skončila (vyhodnocuje se).")
+    check_auction_existence(product)
 
-    if product.status != Status.APPROVED.value:
-        raise HTTPException(status_code=403, detail="Tato aukce není aktuálně spuštěná.")
-
-    now_utc = datetime.now(UTC)
-
-    if product.starts_at and product.starts_at >= now_utc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Aukce ještě nezačala"
-        )
-
-    if product.ends_at and product.ends_at <= now_utc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Aukce již skončila"
-        )
+    check_auction_active(product)
 
     highest_bid = db.query(Bid).filter(Bid.product_id == product_id).order_by(desc(Bid.amount)).first()
 
@@ -372,6 +339,28 @@ async def bid(
     return {"message": "Přihození bylo úspěšné."}
 
 
+@router.post("/buy_now/{product_id}", status_code=status.HTTP_201_CREATED)
+async def buy_now(
+        product_id: int,
+        current_user: Annotated[User, Depends(get_current_user)],
+        db: Session = Depends(get_db)
+):
+    product = db.query(Product).filter(Product.id == product_id).with_for_update().first()
+
+    check_auction_existence(product)
+
+    check_auction_active(product)
+
+    product.buyer_id = current_user.id
+
+    db.commit()
+    db.refresh(product)
+
+    await finalize_auction(product_id, db)
+
+    return {"message": "Nákup byl úspěšný."}
+
+
 @router.post("/follow/{product_id}", status_code=status.HTTP_201_CREATED)
 async def follow_product(
         product_id: int,
@@ -379,11 +368,8 @@ async def follow_product(
         db: Session = Depends(get_db)
 ):
     product = db.query(Product).filter(Product.id == product_id).first()
-    if not product:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Produkt nebyl nalezen."
-        )
+
+    check_auction_existence(product)
 
     existing_follow = db.query(Watchlist).filter(
         Watchlist.follower_id == current_user.id,

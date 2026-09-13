@@ -76,7 +76,7 @@ async def get_current_user(
 ):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
+        detail="Pro tuto akci je třeba se přihlásit.",
     )
 
     if not access_token:

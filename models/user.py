@@ -29,11 +29,12 @@ class User(Base):
     role_id: Mapped[int] = mapped_column(ForeignKey("role.id"), default=1)
 
     role: Mapped["Role"] = relationship(back_populates="users")
-    created_products: Mapped[List["Product"]] = relationship(back_populates="created_by")
+    created_products: Mapped[List["Product"]] = relationship(back_populates="created_by", foreign_keys="[Product.created_by_id]")
     managed_groups: Mapped[List["Group"]] = relationship(back_populates="manager")
     groups: Mapped[List["Group"]] = relationship(secondary="user_group", back_populates="members")
-    bids: Mapped[list["Bid"]] = relationship(back_populates="bidder", cascade="all, delete-orphan")
-    followed_products: Mapped[list["Watchlist"]] = relationship(back_populates="follower", cascade="all, delete-orphan")
+    bids: Mapped[List["Bid"]] = relationship(back_populates="bidder", cascade="all, delete-orphan")
+    followed_products: Mapped[List["Watchlist"]] = relationship(back_populates="follower", cascade="all, delete-orphan")
+    bought_products: Mapped[List["Product"]] = relationship(back_populates="buyer", cascade="all, delete-orphan", foreign_keys="[Product.buyer_id]")
 
 
 class UserBase(BaseModel):

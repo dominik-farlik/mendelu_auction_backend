@@ -17,19 +17,14 @@ import config
 from config import get_settings
 from database import get_db
 from models import User
-from models.user import UserResponse, UserCreate
-from utils.email_verification import create_verification_token, send_verification_email
+from models.user import UserResponse, UserCreate, PasswordResetRequest, PasswordResetConfirm
+from utils.email_actions import create_verification_token, send_verification_email, send_password_reset_email
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 password_hash = PasswordHash.recommended()
 DUMMY_HASH = password_hash.hash("dummypassword")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
 
 
 class TokenData(BaseModel):
@@ -113,7 +108,7 @@ async def login(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail="Nesprávný email nebo heslo.",
         )
 
     if not getattr(user, 'is_verified', True):
@@ -152,7 +147,7 @@ async def register(
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User with this email already exists",
+            detail="Účet s tímto emailem již existuje.",
         )
 
     hashed_password = get_password_hash(user_data.password)
@@ -171,8 +166,7 @@ async def register(
     db.refresh(new_user)
 
     token = create_verification_token(new_user.email, settings)
-    # V produkci použit doménu z konfigurace (např. settings.FRONTEND_URL)
-    verification_link = f"http://localhost:8000/api/auth/verify-email?token={token}"
+    verification_link = f"{settings.BACKEND_URL}/api/auth/verify-email?token={token}"
 
     background_tasks.add_task(send_verification_email, new_user.email, verification_link)
 
@@ -208,7 +202,7 @@ async def verify_email(
     user.is_verified = True
     db.commit()
 
-    return RedirectResponse(url="http://localhost:5173/login?verified=true")
+    return RedirectResponse(url=f"{settings.FRONTEND_URL}/login?verified=true")
 
 
 @router.get("/me/", response_model=UserResponse)
@@ -220,3 +214,58 @@ async def read_users_me(current_user: Annotated[User, Depends(get_current_user)]
 async def logout(response: Response):
     response.delete_cookie(key="access_token")
     return {"message": "Logged out successfully"}
+
+
+@router.post("/request-password-reset")
+async def request_password_reset(
+        request: PasswordResetRequest,
+        background_tasks: BackgroundTasks,
+        db: Session = Depends(get_db),
+        settings: config.Settings = Depends(get_settings)
+):
+    user = get_user(db, request.email)
+
+    success_message = {
+        "message": "Pokud účet s tímto e-mailem existuje, odeslali jsme na něj instrukce k obnově hesla."}
+
+    if not user:
+        return success_message
+
+    expire = datetime.now(timezone.utc) + timedelta(minutes=30)
+    to_encode = {"sub": user.email, "type": "password_reset", "exp": expire}
+    token = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.PASSWORD_ALGORITHM)
+
+    reset_link = f"{settings.FRONTEND_URL}/obnovit-heslo?token={token}"
+
+    background_tasks.add_task(send_password_reset_email, user.email, reset_link)
+
+    return success_message
+
+
+@router.post("/reset-password")
+async def reset_password(
+        request: PasswordResetConfirm,
+        db: Session = Depends(get_db),
+        settings: config.Settings = Depends(get_settings)
+):
+    try:
+        payload = jwt.decode(request.token, settings.SECRET_KEY, algorithms=[settings.PASSWORD_ALGORITHM])
+
+        if payload.get("type") != "password_reset":
+            raise InvalidTokenError()
+
+        email = payload.get("sub")
+    except InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Neplatný nebo expirovaný odkaz pro obnovu hesla."
+        )
+
+    user = get_user(db, email)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Uživatel nenalezen.")
+
+    user.password = get_password_hash(request.new_password)
+    db.commit()
+
+    return {"message": "Vaše heslo bylo úspěšně změněno. Nyní se můžete přihlásit."}

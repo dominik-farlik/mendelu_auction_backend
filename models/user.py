@@ -43,6 +43,14 @@ class UserBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PasswordResetRequest(BaseModel):
+    email: str
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+
 class UserResponse(UserBase):
     id: int
     email: str

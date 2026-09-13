@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     UPLOAD_DIR: Path
 
     DATABASE_URL: str
+    FRONTEND_URL: str
+    BACKEND_URL: str
 
     MAIL_USERNAME: str
     MAIL_PASSWORD: str

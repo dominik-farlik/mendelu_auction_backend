@@ -351,6 +351,19 @@ async def buy_now(
 
     check_auction_active(product)
 
+    highest_bid = db.query(Bid).filter(Bid.product_id == product_id).order_by(desc(Bid.amount)).first()
+
+    if highest_bid:
+        required_minimum = highest_bid.amount
+        if product.min_bid:
+            required_minimum += product.min_bid
+
+        if highest_bid.amount > product.buy_now_price:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Produkt již nelze zakoupit, jelikož byla přesáhnuta cena \"Kup teď\" příhozem v aukci. Nyní můžete pouze přihodit částku minimálně {required_minimum} Kč"
+            )
+
     product.buyer_id = current_user.id
 
     db.commit()

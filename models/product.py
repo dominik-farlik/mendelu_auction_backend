@@ -33,7 +33,7 @@ class Category(StrEnum):
     FOOD = "Jídlo"
     MERCH = "Merch"
     FASHION = "Móda"
-    SERVICES = "SluŽby"
+    SERVICES = "Služby"
     SPORT = "Sport"
     ART = "Umění"
     FUN = "Zábava"

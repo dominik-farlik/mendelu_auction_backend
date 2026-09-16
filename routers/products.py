@@ -1,9 +1,9 @@
 import json
 import os
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
 from typing import List, Optional, Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Form, UploadFile, File
-from sqlalchemy import select, delete, desc
+from sqlalchemy import select, delete, desc, or_, and_
 from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
@@ -193,15 +193,17 @@ async def get_products(
         limit: int = 100,
         active: bool = False,
         approved: bool = False,
+        finished: int = 0,
         db: Session = Depends(get_db)
 ):
     """
-    Získá seznam produktů, podle filtrů
+    Získá seznam produktů, podle filtrů (filtry se sčítají pomocí OR)
     :param current_user:
     :param skip:
     :param limit:
     :param active: Právě běžící aukce
     :param approved: Schválené aukce, čekající na spuštění
+    :param finished: Počet hodin po skončení aukce
     :param db:
     :return:
     """
@@ -212,17 +214,34 @@ async def get_products(
         selectinload(Product.followers)
     )
 
+    conditions = []
+
     if active:
-        query = query.where(
-            Product.status == Status.APPROVED.value,
-            Product.starts_at <= now,
-            Product.ends_at >= now
+        conditions.append(
+            and_(
+                Product.status == Status.APPROVED.value,
+                Product.starts_at <= now,
+                Product.ends_at >= now
+            )
         )
 
     if approved:
-        query = query.where(
+        conditions.append(
             Product.status == Status.APPROVED.value
         )
+
+    if finished > 0:
+        threshold_time = now - timedelta(hours=finished)
+        conditions.append(
+            and_(
+                Product.status == Status.FINISHED.value,
+                Product.ends_at >= threshold_time,
+                Product.ends_at <= now
+            )
+        )
+
+    if conditions:
+        query = query.where(or_(*conditions))
 
     result = db.execute(query.offset(skip).limit(limit))
     products = result.scalars().all()
@@ -233,6 +252,27 @@ async def get_products(
             is_followed = any(follow.follower_id == current_user.id for follow in product.followers)
 
         setattr(product, "is_followed", is_followed)
+
+    return products
+
+
+@router.get("/big_previews", response_model=List[ProductResponse])
+async def get_main_products(db: Session = Depends(get_db)):
+    now = datetime.now(UTC)
+
+    query = (select(Product)
+    .where(
+        Product.status == Status.APPROVED.value,
+        Product.starts_at <= now,
+        Product.ends_at >= now,
+        Product.big_preview == True)
+    .options(
+        selectinload(Product.bids),
+        selectinload(Product.followers)
+    ))
+
+    result = db.execute(query)
+    products = result.scalars().all()
 
     return products
 

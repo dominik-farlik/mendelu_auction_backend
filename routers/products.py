@@ -191,10 +191,20 @@ async def get_products(
         current_user: Annotated[User, Depends(get_current_user_optional)],
         skip: int = 0,
         limit: int = 100,
-        only_active: bool = True,
+        active: bool = False,
+        approved: bool = False,
         db: Session = Depends(get_db)
 ):
-    """Získání seznamu produktů"""
+    """
+    Získá seznam produktů, podle filtrů
+    :param current_user:
+    :param skip:
+    :param limit:
+    :param active: Právě běžící aukce
+    :param approved: Schválené aukce, čekající na spuštění
+    :param db:
+    :return:
+    """
     now = datetime.now(UTC)
 
     query = select(Product).options(
@@ -202,11 +212,16 @@ async def get_products(
         selectinload(Product.followers)
     )
 
-    if only_active:
+    if active:
         query = query.where(
             Product.status == Status.APPROVED.value,
             Product.starts_at <= now,
             Product.ends_at >= now
+        )
+
+    if approved:
+        query = query.where(
+            Product.status == Status.APPROVED.value
         )
 
     result = db.execute(query.offset(skip).limit(limit))

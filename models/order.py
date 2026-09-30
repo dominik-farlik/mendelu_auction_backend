@@ -14,11 +14,11 @@ class OrderStatus(str, enum.Enum):
 
 
 class Order(Base):
-    __tablename__ = "orders"
+    __tablename__ = "order"
 
     id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
-    buyer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("product.id"), nullable=False)
+    buyer_id = Column(Integer, ForeignKey("user.id"), nullable=False)
     amount = Column(Float, nullable=False)
     status = Column(Enum(OrderStatus), default=OrderStatus.PENDING, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

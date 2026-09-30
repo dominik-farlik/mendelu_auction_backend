@@ -8,3 +8,4 @@ from .user_group import user_group
 from .bid import Bid
 from .role import Role
 from .watchlist import Watchlist
+from .order import Order

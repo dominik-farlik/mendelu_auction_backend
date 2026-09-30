@@ -60,3 +60,40 @@ async def send_password_reset_email(email: str, password_reset_link: str):
 
     fm = FastMail(connection_config)
     await fm.send_message(message)
+
+
+async def send_auction_winner_email(email: str, product_title: str, price: float, expires_at: datetime):
+    deadline_str = expires_at.strftime("%d.%m.%Y v %H:%M")
+    body = f"""
+    Gratulujeme! Vyhráli jste aukci produktu '{product_title}'.
+    Konečná cena: {price} Kč.
+
+    Pro dokončení objednávky prosím uhraďte částku do {deadline_str}.
+    Pokud platba nebude provedena, nabídka automaticky přejde na dalšího dražitele v pořadí.
+    """
+    message = MessageSchema(
+        subject="Vyhráli jste aukci! Instrukce k platbě",
+        recipients=[email],
+        body=body,
+        subtype=MessageType.plain
+    )
+    fm = FastMail(connection_config)
+    await fm.send_message(message)
+
+
+async def send_runner_up_email(email: str, product_title: str, price: float, expires_at: datetime):
+    deadline_str = expires_at.strftime("%d.%m.%Y v %H:%M")
+    body = f"""
+    Dobrý den, původní výherce aukce produktu '{product_title}' neuhradil platbu včas. 
+    Jelikož jste byl/a dalším v pořadí s nabídkou {price} Kč, produkt nyní nabízíme vám!
+
+    Máte 48 hodin (do {deadline_str}) na uhrazení částky a převzetí produktu.
+    """
+    message = MessageSchema(
+        subject="Dodatečná nabídka: Vyhráli jste aukci!",
+        recipients=[email],
+        body=body,
+        subtype=MessageType.plain
+    )
+    fm = FastMail(connection_config)
+    await fm.send_message(message)

@@ -1,13 +1,15 @@
 import asyncio
 import logging
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
 
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from database import SessionLocal
-from models import Bid, Product
+from models import Bid, Product, User
+from models.order import Order, OrderStatus
 from models.product import Status
+from utils.email_actions import send_auction_winner_email
 from ws_manager import manager
 
 
@@ -33,6 +35,23 @@ async def finalize_auction(product_id: int, db: Session):
         final_price = highest_bid.amount if highest_bid else None
         buy_now = False
 
+    if winner_id and final_price:
+        expires_at = datetime.now(UTC) + timedelta(hours=48)
+
+        new_order = Order(
+            product_id=product_id,
+            buyer_id=winner_id,
+            amount=final_price,
+            status=OrderStatus.PENDING,
+            expires_at=expires_at
+        )
+        db.add(new_order)
+        db.commit()
+
+        winner = db.query(User).filter(User.id == winner_id).first()
+        if winner:
+            await send_auction_winner_email(winner.email, product.title, final_price, expires_at)
+
     ws_payload = {
         "type": "AUCTION_ENDED",
         "payload": {
@@ -44,12 +63,6 @@ async def finalize_auction(product_id: int, db: Session):
         }
     }
     await manager.broadcast_to_product(ws_payload, product_id)
-
-    # 2. Zde můžeš zavolat asynchronní odeslání e-mailů (vítězi i poraženým)
-    # await send_auction_end_emails(product, highest_bid)
-
-    # 3. Zde můžeš vytvořit objednávku (Order) v databázi pro fakturaci
-    # create_order_for_winner(product, highest_bid)
 
 
 async def auction_ender_task():

@@ -9,17 +9,25 @@ from fastapi.staticfiles import StaticFiles
 
 from routers import auth, users, groups, products, ws
 from utils.auction_end_checker import auction_ender_task
+from utils.order_payment_checker import unpaid_order_checker_task
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    task = asyncio.create_task(auction_ender_task())
+    auction_task = asyncio.create_task(auction_ender_task())
+    unpaid_task = asyncio.create_task(unpaid_order_checker_task())
+
     yield
-    task.cancel()
+
+    auction_task.cancel()
+    unpaid_task.cancel()
+
+    await asyncio.gather(auction_task, unpaid_task, return_exceptions=True)
 
 app = FastAPI(title="MENDELU Auction API", lifespan=lifespan)
 

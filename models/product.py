@@ -65,7 +65,7 @@ class Product(Base):
     created_by: Mapped["User"] = relationship(back_populates="created_products", foreign_keys=[created_by_id])
     group: Mapped["Group"] = relationship(back_populates="products")
     buyer: Mapped["User"] = relationship(back_populates="bought_products", foreign_keys=[buyer_id])
-    images: Mapped[List["ProductImage"]] = relationship(back_populates="product")
+    images: Mapped[List["ProductImage"]] = relationship(back_populates="product", cascade="all, delete-orphan")
     bids: Mapped[List["Bid"]] = relationship(back_populates="product", cascade="all, delete-orphan")
     followers: Mapped[list["Watchlist"]] = relationship(back_populates="product", cascade="all, delete-orphan")
 

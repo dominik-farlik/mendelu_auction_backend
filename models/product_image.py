@@ -13,5 +13,5 @@ class ProductImage(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     filename: Mapped[str] = mapped_column(String(255), unique=True)
 
-    product_id: Mapped[int] = mapped_column(ForeignKey("product.id"))
+    product_id: Mapped[int] = mapped_column(ForeignKey("product.id", ondelete="CASCADE"))
     product: Mapped["Product"] = relationship(back_populates="images")

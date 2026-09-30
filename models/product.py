@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from models.bid import Bid
     from models.group import Group
     from models.watchlist import Watchlist
+    from models.order import Order
 
 
 class Status(StrEnum):
@@ -68,6 +69,7 @@ class Product(Base):
     images: Mapped[List["ProductImage"]] = relationship(back_populates="product", cascade="all, delete-orphan")
     bids: Mapped[List["Bid"]] = relationship(back_populates="product", cascade="all, delete-orphan")
     followers: Mapped[list["Watchlist"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+    orders: Mapped[list["Order"]] = relationship("Order", back_populates="product", cascade="all, delete-orphan")
 
 
 class ProductBase(BaseModel):

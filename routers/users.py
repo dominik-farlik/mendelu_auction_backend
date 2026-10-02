@@ -1,13 +1,14 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from sqlalchemy.orm import Session
 
 from database import get_db
 from dependencies import RoleChecker
-from models import User, Product, Bid, Watchlist
-from models.product import ProductResponse
+from models import User, Product, Bid, Watchlist, Order
+from models.order import OrderStatus
+from models.product import ProductResponse, ProductWinResponse
 from models.role import RoleEnum, Role, RoleUpdate
 from models.user import UserResponse, UserUpdate
 from routers.auth import get_current_user
@@ -119,3 +120,31 @@ async def get_bidded_products(
     )
 
     return products
+
+
+@router.get("/me/wins", response_model=list[ProductWinResponse], status_code=status.HTTP_200_OK)
+async def get_won_auctions(
+        current_user: Annotated[User, Depends(get_current_user)],
+        db: Session = Depends(get_db)
+):
+    query = (
+        select(Order)
+        .where(
+            Order.buyer_id == current_user.id,
+            Order.status.in_([OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.PROCESSING])
+        )
+        .order_by(desc(Order.created_at))
+    )
+    result = db.execute(query)
+    orders = result.scalars().all()
+
+    return [
+        {
+            "order_id": order.id,
+            "amount": order.amount,
+            "status": order.status,
+            "expires_at": order.expires_at,
+            "product": order.product
+        }
+        for order in orders
+    ]

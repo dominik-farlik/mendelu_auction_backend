@@ -4,7 +4,7 @@ import jwt
 from fastapi_mail import MessageSchema, MessageType, FastMail, ConnectionConfig
 
 import config
-
+from config import get_settings
 
 settings = config.get_settings()
 
@@ -62,13 +62,16 @@ async def send_password_reset_email(email: str, password_reset_link: str):
     await fm.send_message(message)
 
 
-async def send_auction_winner_email(email: str, product_title: str, price: float, expires_at: datetime):
+async def send_auction_winner_email(email: str, product_title: str, price: float, expires_at: datetime, product_id: int):
     deadline_str = expires_at.strftime("%d.%m.%Y v %H:%M")
     body = f"""
     Gratulujeme! Vyhráli jste aukci produktu '{product_title}'.
     Konečná cena: {price} Kč.
 
     Pro dokončení objednávky prosím uhraďte částku do {deadline_str}.
+    
+    Instrukce k zaplacení výhry naleznete zde: {get_settings().FRONTEND_URL}/aukce/platba/{product_id}
+    
     Pokud platba nebude provedena, nabídka automaticky přejde na dalšího dražitele v pořadí.
     """
     message = MessageSchema(

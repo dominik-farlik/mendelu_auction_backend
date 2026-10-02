@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from models.base import Base
 from models.group import GroupBase
 from models.user import UserResponse
+from models.order import OrderStatus
 
 if TYPE_CHECKING:
     from models.user import User
@@ -121,3 +122,27 @@ class ProductBid(BaseModel):
 
 class ProductUpdateStatus(BaseModel):
     status: Status
+
+
+class ProductWinResponse(BaseModel):
+    order_id: int
+    amount: float
+    status: OrderStatus
+    expires_at: datetime
+    product: ProductResponse
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OrderDetailResponse(BaseModel):
+    order_id: int
+    amount: float
+    status: OrderStatus
+    expires_at: datetime
+    product: ProductResponse
+
+    # Platební údaje (můžeš si natvrdo načítat z configu)
+    bank_account: str
+    variable_symbol: str  # Jako variabilní symbol se skvěle hodí ID objednávky
+
+    model_config = ConfigDict(from_attributes=True)

@@ -50,7 +50,7 @@ async def finalize_auction(product_id: int, db: Session):
 
         winner = db.query(User).filter(User.id == winner_id).first()
         if winner:
-            await send_auction_winner_email(winner.email, product.title, final_price, expires_at)
+            await send_auction_winner_email(winner.email, product.title, final_price, expires_at, product_id)
 
     ws_payload = {
         "type": "AUCTION_ENDED",

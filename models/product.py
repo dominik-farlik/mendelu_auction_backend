@@ -140,9 +140,12 @@ class OrderDetailResponse(BaseModel):
     status: OrderStatus
     expires_at: datetime
     product: ProductResponse
+    buyer: UserResponse | None = None
 
-    # Platební údaje (můžeš si natvrdo načítat z configu)
+    delivery_method: Optional[str] = None
+    shipping_address: Optional[str] = None
+
     bank_account: str
-    variable_symbol: str  # Jako variabilní symbol se skvěle hodí ID objednávky
+    variable_symbol: str
 
     model_config = ConfigDict(from_attributes=True)

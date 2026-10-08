@@ -36,7 +36,10 @@ async def finalize_auction(product_id: int, db: Session):
         buy_now = False
 
     if winner_id and final_price:
-        expires_at = datetime.now(UTC) + timedelta(hours=48)
+        if buy_now:
+            expires_at = datetime.now(UTC) + timedelta(hours=6)
+        else:
+            expires_at = datetime.now(UTC) + timedelta(days=2)
 
         new_order = Order(
             product_id=product_id,

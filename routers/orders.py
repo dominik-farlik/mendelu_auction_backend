@@ -1,14 +1,15 @@
-from typing import Annotated
+from typing import Annotated, List
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
+from starlette import status
 
 from config import get_settings
 from database import get_db
 from dependencies import RoleChecker
-from models import User, Order
+from models import User, Order, Group
 from models.order import OrderStatus, ConfirmOrderRequest, DeliveryMethod
-from models.product import OrderDetailResponse
+from models.product import OrderDetailResponse, ProductResponse, Product, Status
 from models.role import RoleEnum
 from routers.auth import get_current_user
 from utils.order_payment_checker import process_next_bidder
@@ -32,7 +33,10 @@ async def get_order_by_product(
     ).first()
 
     if not order:
-        raise HTTPException(status_code=404, detail="Aktivní objednávka pro tento produkt nebyla nalezena.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Aktivní objednávka pro tento produkt nebyla nalezena."
+        )
 
     return {
         "order_id": order.id,
@@ -45,6 +49,47 @@ async def get_order_by_product(
     }
 
 
+@router.get("/group/{group_id}", response_model=List[OrderDetailResponse], dependencies=[Depends(allow_editor_or_manager)])
+async def get_orders_by_group(
+        group_id: int,
+        db: Session = Depends(get_db),
+):
+    """Získá všechny objednávky pro hotové produkty patřící do specifikované skupiny."""
+    group = db.get(Group, group_id)
+    if not group:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Skupina s ID {group_id} nebyla nalezena."
+        )
+
+    orders = (
+        db.query(Order)
+        .options(joinedload(Order.buyer))
+        .join(Product, Order.product_id == Product.id)
+        .filter(
+            Product.group_id == group_id,
+            Product.status == Status.FINISHED,
+        )
+        .all()
+    )
+
+    return [
+        {
+            "order_id": order.id,
+            "amount": order.amount,
+            "status": order.status,
+            "expires_at": order.expires_at,
+            "product": order.product,
+            "buyer": order.buyer,
+            "delivery_method": order.delivery_method,
+            "shipping_address": order.shipping_address,
+            "bank_account": getattr(get_settings(), "TRANSPARENT_ACCOUNT", "Zatím nezadáno"),
+            "variable_symbol": str(order.product.id),
+        }
+        for order in orders
+    ]
+
+
 @router.post("/{order_id}/confirm")
 async def confirm_order(
         order_id: int,
@@ -55,13 +100,13 @@ async def confirm_order(
     order = db.query(Order).filter(Order.id == order_id, Order.buyer_id == current_user.id).first()
 
     if not order:
-        raise HTTPException(status_code=404, detail="Objednávka nebyla nalezena.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objednávka nebyla nalezena.")
 
     if order.status != OrderStatus.PENDING:
-        raise HTTPException(status_code=400, detail="Tuto objednávku nelze potvrdit, nečeká na platbu.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tuto objednávku nelze potvrdit, nečeká na platbu.")
 
     if request.delivery_method == "shipping" and not request.shipping_address:
-        raise HTTPException(status_code=400, detail="Při doručení poštou je adresa povinná.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Při doručení poštou je adresa povinná.")
 
     db_delivery_method = DeliveryMethod.PICKUP if request.delivery_method == "personal" else DeliveryMethod.DELIVERY
 
@@ -74,20 +119,19 @@ async def confirm_order(
     return {"message": "Objednávka byla potvrzena a čeká na zpracování platby."}
 
 
-@router.post("/{order_id}/mark-paid")
+@router.post("/{order_id}/mark-paid", dependencies=[Depends(allow_editor_or_manager)])
 async def mark_order_as_paid(
         order_id: int,
-        current_user: Annotated[User, Depends(allow_editor_or_manager)],
         db: Session = Depends(get_db)
 ):
     order = db.query(Order).filter(Order.id == order_id).first()
 
     if not order:
-        raise HTTPException(status_code=404, detail="Objednávka nebyla nalezena.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objednávka nebyla nalezena.")
 
     if order.status != OrderStatus.PROCESSING:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Objednávku nelze označit jako zaplacenou. Aktuální stav je: {order.status.value}"
         )
 
@@ -108,7 +152,7 @@ async def cancel_won_auction(
 ):
     order = db.query(Order).filter(Order.id == order_id, Order.buyer_id == current_user.id).first()
     if not order or order.status != OrderStatus.PENDING:
-        raise HTTPException(status_code=400, detail="Objednávku nelze odmítnout.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Objednávku nelze odmítnout.")
 
     order.status = OrderStatus.CANCELLED
     db.commit()

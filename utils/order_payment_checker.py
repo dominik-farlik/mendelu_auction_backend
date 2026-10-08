@@ -4,6 +4,7 @@ from datetime import datetime, UTC, timedelta
 from database import logger, SessionLocal
 from models import Product, User, Bid
 from models.order import Order, OrderStatus
+from models.product import Status
 from utils.email_actions import send_runner_up_email
 
 
@@ -39,8 +40,21 @@ from sqlalchemy import desc
 
 
 async def process_next_bidder(db, product_id: int):
-    """2. Procesuje novou objednávku pro dalšího zájemce v pořadí (Optimalizováno)."""
+    """2. Procesuje novou objednávku pro dalšího zájemce v pořadí nebo obnoví aukci."""
     try:
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            logger.error(f"Product {product_id} not found.")
+            return
+
+        auction_ended = product.ends_at and product.ends_at < datetime.now(UTC)
+
+        if not auction_ended:
+            product.status = Status.APPROVED
+            db.commit()
+            logger.info(f"Auction for product {product_id} was restarted due to non-payment/rejection of Buy Now.")
+            return
+
         existing_buyers = db.query(Order.buyer_id).filter(Order.product_id == product_id)
 
         next_bid = (
@@ -65,11 +79,7 @@ async def process_next_bidder(db, product_id: int):
             db.add(next_order)
             db.commit()
 
-            user, product = (
-                db.query(User, Product)
-                .filter(User.id == next_bid.bidder_id, Product.id == product_id)
-                .first()
-            ) or (None, None)
+            user = db.query(User).filter(User.id == next_bid.bidder_id).first()
 
             if user and product:
                 await send_runner_up_email(user.email, product.title, next_bid.amount, new_expires_at)

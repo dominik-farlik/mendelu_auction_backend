@@ -21,6 +21,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str | None] = mapped_column(String(50), unique=True)
     email: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    phone_number: Mapped[str | None] = mapped_column(String(20), unique=True)
     password: Mapped[str] = mapped_column(String(100), nullable=False)
     first_name: Mapped[str] = mapped_column(String(50), nullable=False)
     last_name: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -57,6 +58,7 @@ class PasswordResetConfirm(BaseModel):
 class UserResponse(UserBase):
     id: int
     email: str
+    phone_number: str | None
     username: str | None
     role: RoleResponse
     public_last_name: bool
@@ -64,12 +66,14 @@ class UserResponse(UserBase):
 
 class UserCreate(UserBase):
     email: str
+    phone_number: str | None
     password: str
     username: str | None = None
 
 
 class UserUpdate(UserBase):
     email: str
+    phone_number: str | None
     username: str | None = None
     public_last_name: bool
 

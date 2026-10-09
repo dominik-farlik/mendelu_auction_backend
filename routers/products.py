@@ -10,7 +10,8 @@ from database import get_db
 from dependencies import RoleChecker, get_current_user_optional
 from models import ProductImage, Bid, Watchlist
 from models.bid import BidCreate
-from models.product import Product, ProductResponse, ProductCreate, Status, ProductBid, ProductUpdateStatus
+from models.product import Product, ProductResponse, ProductCreate, Status, ProductBid, ProductUpdateStatus, \
+    ProductPriceUpdate
 from models.group import Group
 from models.role import RoleEnum
 from models.user import User
@@ -158,6 +159,42 @@ async def update_product(
                     filename=img_path
                 )
                 db.add(new_product_image)
+
+    db.commit()
+    db.refresh(product)
+
+    return product
+
+
+@router.patch(
+    "/{product_id}/price",
+    response_model=ProductResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(allow_editor_or_manager)],
+)
+async def update_product_price(
+        product_id: int,
+        price_in: ProductPriceUpdate,
+        db: Session = Depends(get_db)
+):
+    """
+    Úprava cen aukce (počáteční cena, minimální příhoz, cena Kup teď).
+    Cenu nelze měnit, pokud už v aukci proběhl nějaký příhoz.
+    """
+    product = db.execute(select(Product).where(Product.id == product_id)).scalar_one_or_none()
+    check_auction_existence(product)
+
+    has_bids = db.execute(
+        select(Bid.id).where(Bid.product_id == product_id).limit(1)
+    ).first()
+    if has_bids:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cenu aukce nelze upravit, protože už byly zadány příhozy."
+        )
+
+    for key, value in price_in.model_dump().items():
+        setattr(product, key, value)
 
     db.commit()
     db.refresh(product)

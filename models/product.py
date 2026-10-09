@@ -149,3 +149,9 @@ class OrderDetailResponse(BaseModel):
     variable_symbol: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProductPriceUpdate(BaseModel):
+    starting_price: float | None
+    min_bid: float | None
+    buy_now_price: float | None

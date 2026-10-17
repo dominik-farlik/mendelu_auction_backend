@@ -9,7 +9,7 @@ from utils.email_actions import send_runner_up_email
 
 
 async def unpaid_order_checker_task():
-    """1. Kontroluje expirované objednávky v nekonečném cyklu."""
+    """1. Kontroluje expirované objednávky."""
     while True:
         db = SessionLocal()
         try:

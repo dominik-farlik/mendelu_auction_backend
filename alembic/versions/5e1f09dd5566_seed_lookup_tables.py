@@ -53,7 +53,7 @@ def upgrade() -> None:
             "username": "admin",
             "email": settings.ADMIN_EMAIL,
             "password": get_password_hash(settings.ADMIN_PASSWORD),
-            "role_id": 1,
+            "role_id": 3,
             "is_verified": True,
             "public_last_name": True,
         },

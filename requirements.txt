@@ -25,5 +25,6 @@ itsdangerous
 httpx
 pyjwt
 pwdlib
+pwdlib[argon2]
 pydantic-settings
 fastapi-mail

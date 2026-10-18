@@ -28,3 +28,4 @@ pwdlib
 pwdlib[argon2]
 pydantic-settings
 fastapi-mail
+python-multipart

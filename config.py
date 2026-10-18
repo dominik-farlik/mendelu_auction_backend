@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     UPLOAD_DIR: Path
 
+    ADMIN_EMAIL: str
+    ADMIN_PASSWORD: str
+
     DATABASE_URL: str
     FRONTEND_URL: str
     BACKEND_URL: str

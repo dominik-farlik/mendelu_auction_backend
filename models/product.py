@@ -98,6 +98,14 @@ class ProductCreate(ProductBase):
     group_id: int
 
 
+class ProductBid(BaseModel):
+    bidder: UserResponse
+    amount: float
+    bid_time: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ProductResponse(ProductBase):
     id: int
     created_by_id: int
@@ -108,14 +116,6 @@ class ProductResponse(ProductBase):
     bids: List[ProductBid] = []
     is_followed: bool = False
     buyer_id: int | None = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class ProductBid(BaseModel):
-    bidder: UserResponse
-    amount: float
-    bid_time: datetime
 
     model_config = ConfigDict(from_attributes=True)
 

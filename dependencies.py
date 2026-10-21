@@ -26,6 +26,25 @@ class RoleChecker:
         return current_user
 
 
+def is_manager(user: User | None) -> bool:
+    return bool(user and user.role and user.role.name == RoleEnum.MANAGER)
+
+
+def is_editor_or_manager(user: User | None) -> bool:
+    return bool(user and user.role and user.role.name in (RoleEnum.EDITOR, RoleEnum.MANAGER))
+
+
+def ensure_group_access(user: User, group_id: int) -> None:
+    """Manažer smí do všech skupin, editor jen do skupin, jejichž je členem."""
+    if is_manager(user):
+        return
+    if not any(group.id == group_id for group in user.groups):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="K této skupině nemáte přístup."
+        )
+
+
 async def get_current_user_optional(
         access_token: Annotated[str | None, Cookie()] = None,
         db: Session = Depends(get_db),

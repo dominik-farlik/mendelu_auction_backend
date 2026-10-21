@@ -19,6 +19,7 @@ from database import get_db
 from models import User
 from models.user import UserResponse, UserCreate, PasswordResetRequest, PasswordResetConfirm
 from utils.email_actions import create_verification_token, send_verification_email, send_password_reset_email
+from utils.rate_limit import rate_limit, rate_limit_key
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -97,13 +98,15 @@ async def get_current_user(
     return user
 
 
-@router.post("/login")
+@router.post("/login", dependencies=[Depends(rate_limit("login", limit=20, window_seconds=60))])
 async def login(
         response: Response,
         form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
         db: Session = Depends(get_db),
         settings: config.Settings = Depends(get_settings),
 ):
+    rate_limit_key("login", form_data.username, limit=10, window_seconds=15 * 60)
+
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -136,7 +139,12 @@ async def login(
     return {"message": "Přihlášení bylo úspěšné."}
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED, response_model=UserResponse)
+@router.post(
+    "/register",
+    status_code=status.HTTP_201_CREATED,
+    response_model=UserResponse,
+    dependencies=[Depends(rate_limit("register", limit=5, window_seconds=10 * 60))],
+)
 async def register(
         user_data: UserCreate,
         background_tasks: BackgroundTasks,
@@ -216,13 +224,18 @@ async def logout(response: Response):
     return {"message": "Logged out successfully"}
 
 
-@router.post("/request-password-reset")
+@router.post(
+    "/request-password-reset",
+    dependencies=[Depends(rate_limit("password-reset", limit=5, window_seconds=10 * 60))],
+)
 async def request_password_reset(
         request: PasswordResetRequest,
         background_tasks: BackgroundTasks,
         db: Session = Depends(get_db),
         settings: config.Settings = Depends(get_settings)
 ):
+    rate_limit_key("password-reset", request.email, limit=3, window_seconds=60 * 60)
+
     user = get_user(db, request.email)
 
     success_message = {
@@ -242,7 +255,10 @@ async def request_password_reset(
     return success_message
 
 
-@router.post("/reset-password")
+@router.post(
+    "/reset-password",
+    dependencies=[Depends(rate_limit("reset-password", limit=10, window_seconds=10 * 60))],
+)
 async def reset_password(
         request: PasswordResetConfirm,
         db: Session = Depends(get_db),

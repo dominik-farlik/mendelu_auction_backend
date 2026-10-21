@@ -1,14 +1,14 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Optional, TYPE_CHECKING, List
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from sqlalchemy import String, Float, ForeignKey, DateTime, Boolean, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import Base
 from models.group import GroupBase
-from models.user import UserResponse
+from models.user import UserResponse, PublicUserResponse
 from models.order import OrderStatus
 
 if TYPE_CHECKING:
@@ -73,19 +73,29 @@ class Product(Base):
     orders: Mapped[list["Order"]] = relationship("Order", back_populates="product", cascade="all, delete-orphan")
 
 
+MAX_PRICE = 100_000_000
+
+
 class ProductBase(BaseModel):
     title: str = Field(..., max_length=100)
     description: Optional[str] = None
     category: Category = Category.OTHER
-    starting_price: Optional[float] = Field(None, gt=0)
-    buy_now_price: Optional[float] = Field(None, gt=0)
-    min_bid: Optional[float] = Field(None, gt=0)
+    starting_price: Optional[float] = Field(None, gt=0, le=MAX_PRICE)
+    buy_now_price: Optional[float] = Field(None, gt=0, le=MAX_PRICE)
+    min_bid: Optional[float] = Field(None, gt=0, le=MAX_PRICE)
     cover_image: Optional[str] = Field(None, max_length=255)
     big_preview: bool = False
     starts_at: Optional[datetime]
     ends_at: Optional[datetime]
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, allow_inf_nan=False)
+
+
+def validate_prices(starting_price: float | None, buy_now_price: float | None) -> None:
+    if starting_price is None and buy_now_price is None:
+        raise ValueError("Aukce musí mít počáteční cenu nebo cenu Kup teď.")
+    if starting_price is not None and buy_now_price is not None and buy_now_price <= starting_price:
+        raise ValueError("Cena Kup teď musí být vyšší než počáteční cena.")
 
 
 class ProductImageResponse(BaseModel):
@@ -97,9 +107,23 @@ class ProductImageResponse(BaseModel):
 class ProductCreate(ProductBase):
     group_id: int
 
+    @model_validator(mode="after")
+    def validate_auction(self):
+        if self.starts_at is None or self.ends_at is None:
+            raise ValueError("Aukce musí mít začátek i konec.")
+
+        if self.starts_at.tzinfo is None:
+            self.starts_at = self.starts_at.replace(tzinfo=timezone.utc)
+        if self.ends_at.tzinfo is None:
+            self.ends_at = self.ends_at.replace(tzinfo=timezone.utc)
+        if self.ends_at <= self.starts_at:
+            raise ValueError("Konec aukce musí být po jejím začátku.")
+        validate_prices(self.starting_price, self.buy_now_price)
+        return self
+
 
 class ProductBid(BaseModel):
-    bidder: UserResponse
+    bidder: PublicUserResponse
     amount: float
     bid_time: datetime
 
@@ -152,6 +176,13 @@ class OrderDetailResponse(BaseModel):
 
 
 class ProductPriceUpdate(BaseModel):
-    starting_price: float | None
-    min_bid: float | None
-    buy_now_price: float | None
+    starting_price: float | None = Field(..., gt=0, le=MAX_PRICE)
+    min_bid: float | None = Field(..., gt=0, le=MAX_PRICE)
+    buy_now_price: float | None = Field(..., gt=0, le=MAX_PRICE)
+
+    model_config = ConfigDict(allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_auction_prices(self):
+        validate_prices(self.starting_price, self.buy_now_price)
+        return self

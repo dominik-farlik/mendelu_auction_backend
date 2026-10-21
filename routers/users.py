@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy import select, desc
 from sqlalchemy.orm import Session
 
@@ -10,7 +10,7 @@ from models import User, Product, Bid, Watchlist, Order
 from models.order import OrderStatus
 from models.product import ProductResponse, ProductWinResponse
 from models.role import RoleEnum, Role, RoleUpdate
-from models.user import UserResponse, UserUpdate
+from models.user import UserResponse, UserUpdate, PublicUserResponse
 from routers.auth import get_current_user
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -43,20 +43,26 @@ async def update_my_profile(
     return current_user
 
 
-@router.get("/{user_id}", response_model=UserResponse)
+@router.get("/{user_id}", response_model=PublicUserResponse)
 async def read_user(
         user_id: int,
         db: Session = Depends(get_db)
 ):
     user = db.query(User).filter(User.id == user_id).first()
 
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Uživatel nebyl nalezen"
+        )
+
     return user
 
 
 @router.get("/", response_model=list[UserResponse], dependencies=[Depends(allow_only_manager)])
 async def read_users(
-        skip: int = 0,
-        limit: int = 100,
+        skip: int = Query(0, ge=0),
+        limit: int = Query(100, ge=1, le=500),
         db: Session = Depends(get_db)
 ):
     users = db.query(User).offset(skip).limit(limit).all()

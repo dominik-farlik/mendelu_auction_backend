@@ -1,6 +1,6 @@
 from typing import List, TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from sqlalchemy import String, ForeignKey, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -80,3 +80,22 @@ class UserUpdate(UserBase):
 
 class ManagerResponse(UserBase):
     id: int
+
+
+def mask_last_name(last_name: str, is_public: bool) -> str:
+    """Pokud uživatel nechce zveřejnit příjmení, vrátí jen jeho iniciálu."""
+    if is_public or not last_name:
+        return last_name
+    return f"{last_name[0]}."
+
+
+class PublicUserResponse(UserBase):
+    """Veřejně zobrazitelné údaje uživatele (bez e-mailu, telefonu a role)."""
+    id: int
+    username: str | None
+    public_last_name: bool
+
+    @model_validator(mode="after")
+    def hide_last_name(self):
+        self.last_name = mask_last_name(self.last_name, self.public_last_name)
+        return self

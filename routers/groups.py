@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import get_db
-from dependencies import RoleChecker
+from dependencies import RoleChecker, ensure_group_access
 from models import Group
 from models.group import GroupResponse, GroupCreate, GroupUpdate, AddMember
 from models.role import RoleEnum
@@ -34,8 +34,13 @@ async def get_user_groups(
 
 
 @router.get("/{group_id}", response_model=GroupResponse)
-async def get_group(group_id: int, db: Session = Depends(get_db)):
+async def get_group(
+        group_id: int,
+        current_user: Annotated[User, Depends(allow_editor_or_manager)],
+        db: Session = Depends(get_db),
+):
     """Vrátí detail konkrétní skupiny podle ID."""
+    ensure_group_access(current_user, group_id)
     group = db.get(Group, group_id)
     if not group:
         raise HTTPException(
@@ -73,7 +78,7 @@ async def create_group(
     return new_group
 
 
-@router.put("/{group_id}", response_model=GroupResponse, dependencies=[Depends(get_current_user)])
+@router.put("/{group_id}", response_model=GroupResponse, dependencies=[Depends(allow_only_manager)])
 async def update_group(
         group_id: int,
         group_data: GroupUpdate,
@@ -87,7 +92,25 @@ async def update_group(
             detail="Skupina nenalezena"
         )
 
-    update_data = group_data.model_dump(exclude_unset=True)
+    update_data = group_data.model_dump(exclude_unset=True, exclude={"id"})
+
+    new_name = update_data.get("name")
+    if new_name and new_name != group.name:
+        if db.scalar(select(Group).where(Group.name == new_name)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Skupina s tímto názvem již existuje"
+            )
+
+    new_manager_id = update_data.get("manager_id")
+    if new_manager_id is not None:
+        new_manager = db.get(User, new_manager_id)
+        if not new_manager or new_manager.role.name != RoleEnum.MANAGER:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Správcem skupiny může být jen existující uživatel s rolí manažer."
+            )
+
     for key, value in update_data.items():
         setattr(group, key, value)
 
@@ -96,13 +119,15 @@ async def update_group(
     return group
 
 
-@router.post("/{group_id}/members", status_code=status.HTTP_200_OK, dependencies=[Depends(allow_editor_or_manager)])
+@router.post("/{group_id}/members", status_code=status.HTTP_200_OK)
 async def add_member_to_group(
         group_id: int,
         member_data: AddMember,
+        current_user: Annotated[User, Depends(allow_editor_or_manager)],
         db: Session = Depends(get_db),
 ):
     """Přidá existujícího uživatele do skupiny podle jeho e-mailu."""
+    ensure_group_access(current_user, group_id)
 
     group = db.get(Group, group_id)
     if not group:

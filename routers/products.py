@@ -1,24 +1,23 @@
 import json
-import os
 from datetime import datetime, UTC, timedelta
 from typing import List, Optional, Annotated
-from fastapi import APIRouter, Depends, HTTPException, status, Form, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, Form, UploadFile, File, Query
 from sqlalchemy import select, delete, desc, or_, and_
 from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
-from dependencies import RoleChecker, get_current_user_optional
+from dependencies import RoleChecker, get_current_user_optional, ensure_group_access, is_editor_or_manager
 from models import ProductImage, Bid, Watchlist
 from models.bid import BidCreate
 from models.product import Product, ProductResponse, ProductCreate, Status, ProductBid, ProductUpdateStatus, \
     ProductPriceUpdate
 from models.group import Group
 from models.role import RoleEnum
-from models.user import User
+from models.user import User, mask_last_name
 from routers.auth import get_current_user
 from utils.auction_end_checker import finalize_auction
 from utils.auction_exceptions import check_auction_existence, check_auction_active
-from utils.save_file import save_upload_file
+from utils.save_file import save_upload_file, delete_files
 from ws_manager import manager
 
 router = APIRouter(
@@ -28,6 +27,32 @@ router = APIRouter(
 
 allow_only_manager = RoleChecker([RoleEnum.MANAGER])
 allow_editor_or_manager = RoleChecker([RoleEnum.EDITOR, RoleEnum.MANAGER])
+
+PUBLIC_STATUSES = (Status.APPROVED.value, Status.FINISHED.value)
+
+
+def ensure_product_visible(product: Product, user: User | None) -> None:
+    """Neschválené a zrušené aukce vidí jen editoři a manažeři."""
+    if product.status not in PUBLIC_STATUSES and not is_editor_or_manager(user):
+        check_auction_existence(None)
+
+
+def ensure_product_editable(product: Product, db: Session) -> None:
+    """Produkt lze upravovat jen dokud aukce neskončila a nikdo nepřihodil."""
+    if product.status == Status.FINISHED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ukončenou aukci nelze upravit."
+        )
+
+    has_bids = db.execute(
+        select(Bid.id).where(Bid.product_id == product.id).limit(1)
+    ).first()
+    if has_bids:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Aukci nelze upravit, protože už byly zadány příhozy."
+        )
 
 
 @router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
@@ -48,6 +73,8 @@ async def create_product(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Neplatný formát JSON dat v poli product_data.")
 
+    ensure_group_access(current_user, product_in.group_id)
+
     group_result = db.execute(select(Group).where(Group.id == product_in.group_id))
     group = group_result.scalar_one_or_none()
     if not group:
@@ -56,26 +83,33 @@ async def create_product(
             detail=f"Skupina s ID {product_in.group_id} neexistuje."
         )
 
-    new_product = Product(
-        **product_in.model_dump(
-            exclude={"cover_image"}),
-            cover_image=save_upload_file(cover_image),
+    saved_paths: list[str] = []
+    try:
+        cover_path = save_upload_file(cover_image)
+        if cover_path:
+            saved_paths.append(cover_path)
+
+        new_product = Product(
+            **product_in.model_dump(exclude={"cover_image"}),
+            cover_image=cover_path,
             created_by_id=current_user.id,
-    )
+        )
 
-    db.add(new_product)
-    db.flush()
+        db.add(new_product)
+        db.flush()
 
-    for img_file in additional_images:
-        if img_file.filename:
-            img_path = save_upload_file(img_file)
-            product_image = ProductImage(
-                product_id=new_product.id,
-                filename=img_path
-            )
-            db.add(product_image)
+        for img_file in additional_images:
+            if img_file.filename:
+                img_path = save_upload_file(img_file)
+                saved_paths.append(img_path)
+                db.add(ProductImage(product_id=new_product.id, filename=img_path))
 
-    db.commit()
+        db.commit()
+    except Exception:
+        db.rollback()
+        delete_files(saved_paths)
+        raise
+
     db.refresh(new_product)
 
     return new_product
@@ -84,13 +118,13 @@ async def create_product(
 @router.put("/{product_id}",
               response_model=ProductResponse,
               status_code=status.HTTP_200_OK,
-              dependencies=[Depends(allow_editor_or_manager)]
               )
 async def update_product(
         product_id: int,
         product_data: str = Form(..., description="JSON řetězec odpovídající ProductCreate"),
         cover_image: Optional[UploadFile] = File(None, description="Nový hlavní úvodní obrázek"),
         additional_images: List[UploadFile] = File([], description="Seznam nových dalších obrázků"),
+        current_user: User = Depends(allow_editor_or_manager),
         db: Session = Depends(get_db)
 ):
     """
@@ -98,10 +132,11 @@ async def update_product(
     Pokud je poskytnut nový cover_image, přepíše se (a starý smaže).
     Pokud jsou poskytnuty nové additional_images, nahradí starou galerii (a staré fotky se smažou).
     """
-
     product = db.execute(select(Product).where(Product.id == product_id)).scalar_one_or_none()
 
     check_auction_existence(product)
+    ensure_group_access(current_user, product.group_id)
+    ensure_product_editable(product, db)
 
     try:
         product_in = ProductCreate(**json.loads(product_data))
@@ -112,6 +147,7 @@ async def update_product(
         )
 
     if product_in.group_id != product.group_id:
+        ensure_group_access(current_user, product_in.group_id)
         group = db.execute(select(Group).where(Group.id == product_in.group_id)).scalar_one_or_none()
         if not group:
             raise HTTPException(
@@ -123,44 +159,47 @@ async def update_product(
     for key, value in update_data.items():
         setattr(product, key, value)
 
-    product.status = "pending"
+    product.status = Status.PENDING
 
-    # Aktualizace hlavního obrázku (pokud byl nahrán nový)
-    if cover_image and cover_image.filename:
-        if product.cover_image and os.path.exists(product.cover_image):
-            try:
-                os.remove(product.cover_image)
-            except OSError as e:
-                print(f"Varování: Nepodařilo se smazat starý cover image {product.cover_image}: {e}")
+    # Nové soubory nejdřív uložíme, staré mažeme až po úspěšném commitu.
+    saved_paths: list[str] = []
+    files_to_delete: list[str] = []
+    try:
+        # Aktualizace hlavního obrázku (pokud byl nahrán nový)
+        if cover_image and cover_image.filename:
+            new_cover = save_upload_file(cover_image)
+            saved_paths.append(new_cover)
+            if product.cover_image:
+                files_to_delete.append(product.cover_image)
+            product.cover_image = new_cover
 
-        product.cover_image = save_upload_file(cover_image)
+        # Aktualizace galerie (pokud byly nahrány nové fotky)
+        if additional_images and additional_images[0].filename:
+            new_gallery_paths = []
+            for img_file in additional_images:
+                if img_file.filename:
+                    img_path = save_upload_file(img_file)
+                    saved_paths.append(img_path)
+                    new_gallery_paths.append(img_path)
 
-    # Aktualizace galerie (pokud byly nahrány nové fotky)
-    if additional_images and additional_images[0].filename:
-        old_gallery_images = db.execute(
-            select(ProductImage).where(ProductImage.product_id == product.id)
-        ).scalars().all()
+            old_gallery_images = db.execute(
+                select(ProductImage).where(ProductImage.product_id == product.id)
+            ).scalars().all()
+            files_to_delete.extend(old_img.filename for old_img in old_gallery_images)
 
-        for old_img in old_gallery_images:
-            if old_img.filename and os.path.exists(old_img.filename):
-                try:
-                    os.remove(old_img.filename)
-                except OSError as e:
-                    print(f"Varování: Nepodařilo se smazat obrázek z galerie {old_img.filename}: {e}")
+            db.execute(delete(ProductImage).where(ProductImage.product_id == product.id))
+            db.flush()
 
-        db.execute(delete(ProductImage).where(ProductImage.product_id == product.id))
-        db.flush()
+            for img_path in new_gallery_paths:
+                db.add(ProductImage(product_id=product.id, filename=img_path))
 
-        for img_file in additional_images:
-            if img_file.filename:
-                img_path = save_upload_file(img_file)
-                new_product_image = ProductImage(
-                    product_id=product.id,
-                    filename=img_path
-                )
-                db.add(new_product_image)
+        db.commit()
+    except Exception:
+        db.rollback()
+        delete_files(saved_paths)
+        raise
 
-    db.commit()
+    delete_files(files_to_delete)
     db.refresh(product)
 
     return product
@@ -170,11 +209,11 @@ async def update_product(
     "/{product_id}/price",
     response_model=ProductResponse,
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(allow_editor_or_manager)],
 )
 async def update_product_price(
         product_id: int,
         price_in: ProductPriceUpdate,
+        current_user: User = Depends(allow_editor_or_manager),
         db: Session = Depends(get_db)
 ):
     """
@@ -183,15 +222,8 @@ async def update_product_price(
     """
     product = db.execute(select(Product).where(Product.id == product_id)).scalar_one_or_none()
     check_auction_existence(product)
-
-    has_bids = db.execute(
-        select(Bid.id).where(Bid.product_id == product_id).limit(1)
-    ).first()
-    if has_bids:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cenu aukce nelze upravit, protože už byly zadány příhozy."
-        )
+    ensure_group_access(current_user, product.group_id)
+    ensure_product_editable(product, db)
 
     for key, value in price_in.model_dump().items():
         setattr(product, key, value)
@@ -216,6 +248,18 @@ async def update_product_status(
 
     check_auction_existence(product)
 
+    if product.status == Status.FINISHED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Stav ukončené aukce už nelze měnit."
+        )
+
+    if status_data.status == Status.FINISHED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aukci nelze ukončit ručně, ukončuje se automaticky."
+        )
+
     product.status = status_data.status
     db.commit()
     db.refresh(product)
@@ -226,11 +270,11 @@ async def update_product_status(
 @router.get("/", response_model=List[ProductResponse])
 async def get_products(
         current_user: Annotated[User, Depends(get_current_user_optional)],
-        skip: int = 0,
-        limit: int = 100,
+        skip: int = Query(0, ge=0),
+        limit: int = Query(100, ge=1, le=100),
         active: bool = False,
         approved: bool = False,
-        finished: int = 0,
+        finished: int = Query(0, ge=0, le=24 * 365),
         db: Session = Depends(get_db)
 ):
     """
@@ -280,6 +324,11 @@ async def get_products(
     if conditions:
         query = query.where(or_(*conditions))
 
+    if not is_editor_or_manager(current_user):
+        query = query.where(Product.status.in_(PUBLIC_STATUSES))
+
+    query = query.order_by(Product.id)
+
     result = db.execute(query.offset(skip).limit(limit))
     products = result.scalars().all()
 
@@ -314,12 +363,14 @@ async def get_main_products(db: Session = Depends(get_db)):
     return products
 
 
-@router.get("/group/{group_id}", response_model=List[ProductResponse], dependencies=[Depends(get_current_user)])
+@router.get("/group/{group_id}", response_model=List[ProductResponse])
 async def get_products_by_group(
         group_id: int,
+        current_user: User = Depends(allow_editor_or_manager),
         db: Session = Depends(get_db),
 ):
     """Získá všechny produkty patřící do specifikované skupiny."""
+    ensure_group_access(current_user, group_id)
     group = db.get(Group, group_id)
     if not group:
         raise HTTPException(
@@ -341,6 +392,7 @@ async def get_product(
     product = result.scalar_one_or_none()
 
     check_auction_existence(product)
+    ensure_product_visible(product, current_user)
 
     product.bids = sorted(product.bids, key=lambda bid: bid.amount, reverse=True)
 
@@ -355,6 +407,7 @@ async def get_product(
 @router.get("/{product_id}/bids", response_model=List[ProductBid])
 async def get_product_bids(
         product_id: int,
+        current_user: Annotated[User, Depends(get_current_user_optional)],
         db: Session = Depends(get_db)
 ):
     """Získání příhozů produktu"""
@@ -362,6 +415,7 @@ async def get_product_bids(
     product = result.scalar_one_or_none()
 
     check_auction_existence(product)
+    ensure_product_visible(product, current_user)
 
     bids_result = db.execute(
         select(Bid)
@@ -389,13 +443,17 @@ async def bid(
     highest_bid = db.query(Bid).filter(Bid.product_id == product_id).order_by(desc(Bid.amount)).first()
 
     if highest_bid:
-        required_minimum = highest_bid.amount
         if product.min_bid:
-            required_minimum += product.min_bid
+            required_minimum = highest_bid.amount + product.min_bid
+            too_low = bid_data.amount < required_minimum
+        else:
+            required_minimum = highest_bid.amount
+            too_low = bid_data.amount <= required_minimum
     else:
-        required_minimum = getattr(product, 'starting_price', 0)
+        required_minimum = product.starting_price or product.min_bid or 1
+        too_low = bid_data.amount < required_minimum
 
-    if bid_data.amount < required_minimum:
+    if too_low:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Příhoz musí být alespoň {required_minimum} Kč"
@@ -420,7 +478,7 @@ async def bid(
             "bidder_id": current_user.id,
             "bidder": {
                 "first_name": current_user.first_name,
-                "last_name": current_user.last_name,
+                "last_name": mask_last_name(current_user.last_name, current_user.public_last_name),
                 "public_last_name": current_user.public_last_name
             }
         }
@@ -443,6 +501,12 @@ async def buy_now(
 
     check_auction_active(product)
 
+    if not product.buy_now_price:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tento produkt nelze zakoupit za cenu \"Kup teď\"."
+        )
+
     highest_bid = db.query(Bid).filter(Bid.product_id == product_id).order_by(desc(Bid.amount)).first()
 
     if highest_bid:
@@ -450,7 +514,7 @@ async def buy_now(
         if product.min_bid:
             required_minimum += product.min_bid
 
-        if highest_bid.amount > product.buy_now_price:
+        if highest_bid.amount >= product.buy_now_price:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Produkt již nelze zakoupit, jelikož byla přesáhnuta cena \"Kup teď\" příhozem v aukci. Nyní můžete pouze přihodit částku minimálně {required_minimum} Kč"
@@ -475,6 +539,7 @@ async def follow_product(
     product = db.query(Product).filter(Product.id == product_id).first()
 
     check_auction_existence(product)
+    ensure_product_visible(product, current_user)
 
     existing_follow = db.query(Watchlist).filter(
         Watchlist.follower_id == current_user.id,

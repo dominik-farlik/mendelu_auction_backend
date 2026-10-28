@@ -6,7 +6,7 @@ from starlette import status
 
 from config import get_settings
 from database import get_db
-from dependencies import RoleChecker
+from dependencies import RoleChecker, ensure_group_access
 from models import User, Order, Group
 from models.order import OrderStatus, ConfirmOrderRequest, DeliveryMethod
 from models.product import OrderDetailResponse, ProductResponse, Product, Status
@@ -49,12 +49,14 @@ async def get_order_by_product(
     }
 
 
-@router.get("/group/{group_id}", response_model=List[OrderDetailResponse], dependencies=[Depends(allow_editor_or_manager)])
+@router.get("/group/{group_id}", response_model=List[OrderDetailResponse])
 async def get_orders_by_group(
         group_id: int,
+        current_user: Annotated[User, Depends(allow_editor_or_manager)],
         db: Session = Depends(get_db),
 ):
     """Získá všechny objednávky pro hotové produkty patřící do specifikované skupiny."""
+    ensure_group_access(current_user, group_id)
     group = db.get(Group, group_id)
     if not group:
         raise HTTPException(
@@ -119,15 +121,18 @@ async def confirm_order(
     return {"message": "Objednávka byla potvrzena a čeká na zpracování platby."}
 
 
-@router.post("/{order_id}/mark-paid", dependencies=[Depends(allow_editor_or_manager)])
+@router.post("/{order_id}/mark-paid")
 async def mark_order_as_paid(
         order_id: int,
+        current_user: Annotated[User, Depends(allow_editor_or_manager)],
         db: Session = Depends(get_db)
 ):
     order = db.query(Order).filter(Order.id == order_id).first()
 
     if not order:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Objednávka nebyla nalezena.")
+
+    ensure_group_access(current_user, order.product.group_id)
 
     if order.status != OrderStatus.PROCESSING:
         raise HTTPException(

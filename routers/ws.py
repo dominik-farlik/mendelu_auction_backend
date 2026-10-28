@@ -6,9 +6,12 @@ ws_router = APIRouter(prefix="/ws")
 
 @ws_router.websocket("/auctions/{product_id}")
 async def auction_websocket(websocket: WebSocket, product_id: int):
-    await manager.connect(websocket, product_id)
+    if not await manager.connect(websocket, product_id):
+        return
     try:
         while True:
-            data = await websocket.receive_text()
+            await websocket.receive_text()
     except WebSocketDisconnect:
+        pass
+    finally:
         manager.disconnect(websocket, product_id)

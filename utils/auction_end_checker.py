@@ -17,8 +17,10 @@ logger = logging.getLogger(__name__)
 
 
 async def finalize_auction(product_id: int, db: Session):
-    product = db.query(Product).filter(Product.id == product_id).first()
-    if not product:
+    product = db.query(Product).filter(Product.id == product_id).with_for_update().first()
+    if not product or product.status != Status.APPROVED:
+        # Aukce už byla ukončena jinde (buy now / jiný běh kontroly), nesmí vzniknout druhá objednávka.
+        db.rollback()
         return
 
     highest_bid = db.query(Bid).filter(Bid.product_id == product_id).order_by(desc(Bid.amount)).first()
@@ -53,7 +55,11 @@ async def finalize_auction(product_id: int, db: Session):
 
         winner = db.query(User).filter(User.id == winner_id).first()
         if winner:
-            await send_auction_winner_email(winner.email, product.title, final_price, expires_at, product_id)
+            try:
+                await send_auction_winner_email(winner.email, product.title, final_price, expires_at, product_id)
+            except Exception as e:
+                # Objednávka už je uložená, chyba e-mailu nesmí shodit request ani ukončování dalších aukcí.
+                logger.error(f"Failed to send winner email for product {product_id}: {e}")
 
     ws_payload = {
         "type": "AUCTION_ENDED",

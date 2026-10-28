@@ -3,8 +3,11 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from routers import auth, users, groups, products, ws, orders
@@ -30,6 +33,12 @@ async def lifespan(app: FastAPI):
     await asyncio.gather(auction_task, unpaid_task, return_exceptions=True)
 
 app = FastAPI(title="MENDELU Auction API", lifespan=lifespan)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = [{key: value for key, value in error.items() if key != "input"} for error in exc.errors()]
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
 
 origins = [
     "http://localhost:5173",

@@ -47,6 +47,8 @@ async def process_next_bidder(db, product_id: int):
             logger.error(f"Product {product_id} not found.")
             return
 
+        product.buyer_id = None
+
         auction_ended = product.ends_at and product.ends_at < datetime.now(UTC)
 
         if not auction_ended:
@@ -85,6 +87,7 @@ async def process_next_bidder(db, product_id: int):
                 await send_runner_up_email(user.email, product.title, next_bid.amount, new_expires_at)
                 logger.info(f"Offered product {product.id} to runner-up user ID {next_bid.bidder_id}")
         else:
+            db.commit()
             logger.info(f"No more bidders available for product {product_id}.")
 
     except Exception as e:

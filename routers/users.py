@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -10,7 +10,7 @@ from models import User, Product, Bid, Watchlist, Order
 from models.order import OrderStatus
 from models.product import ProductResponse, ProductWinResponse
 from models.role import RoleEnum, Role, RoleUpdate
-from models.user import UserResponse, UserUpdate, PublicUserResponse
+from models.user import UserResponse, UserUpdate, PublicUserResponse, UserPublicProfileResponse
 from routers.auth import get_current_user
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -57,6 +57,50 @@ async def read_user(
         )
 
     return user
+
+
+def get_user_or_404(db: Session, user_id: int) -> User:
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Uživatel nebyl nalezen"
+        )
+    return user
+
+
+@router.get("/{user_id}/public", response_model=UserPublicProfileResponse)
+async def read_user_public_profile(user_id: int, db: Session = Depends(get_db)):
+    """Vrátí veřejný profil uživatele se statistikou vyhraných a zaplacených aukcí."""
+    user = get_user_or_404(db, user_id)
+
+    won_auctions_count, total_paid = db.execute(
+        select(func.count(Order.id), func.coalesce(func.sum(Order.amount), 0))
+        .where(Order.buyer_id == user_id, Order.status == OrderStatus.PAID)
+    ).one()
+
+    return UserPublicProfileResponse(
+        id=user.id,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        username=user.username,
+        public_last_name=user.public_last_name,
+        won_auctions_count=won_auctions_count,
+        total_paid=total_paid,
+    )
+
+
+@router.get("/{user_id}/public/wins", response_model=list[ProductResponse])
+async def read_user_public_wins(user_id: int, db: Session = Depends(get_db)):
+    """Vrátí aukce, které uživatel vyhrál a zaplatil."""
+    get_user_or_404(db, user_id)
+
+    return db.scalars(
+        select(Product)
+        .join(Order, Order.product_id == Product.id)
+        .where(Order.buyer_id == user_id, Order.status == OrderStatus.PAID)
+        .order_by(desc(Order.created_at))
+    ).all()
 
 
 @router.get("/", response_model=list[UserResponse], dependencies=[Depends(allow_only_manager)])

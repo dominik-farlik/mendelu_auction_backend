@@ -99,3 +99,9 @@ class PublicUserResponse(UserBase):
     def hide_last_name(self):
         self.last_name = mask_last_name(self.last_name, self.public_last_name)
         return self
+
+
+class UserPublicProfileResponse(PublicUserResponse):
+    """Veřejný profil uživatele včetně statistik vyhraných (zaplacených) aukcí."""
+    won_auctions_count: int
+    total_paid: float

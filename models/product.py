@@ -7,7 +7,7 @@ from sqlalchemy import String, Float, ForeignKey, DateTime, Boolean, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import Base
-from models.group import GroupBase
+from models.group import GroupWithOrganization
 from models.user import UserResponse, PublicUserResponse
 from models.order import OrderStatus
 
@@ -133,7 +133,7 @@ class ProductBid(BaseModel):
 class ProductResponse(ProductBase):
     id: int
     created_by_id: int
-    group: GroupBase
+    group: GroupWithOrganization
     created_at: datetime
     status: Status
     images: List[ProductImageResponse] = []

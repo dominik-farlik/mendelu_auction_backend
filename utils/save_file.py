@@ -1,5 +1,6 @@
 import os
 import uuid
+from pathlib import Path
 from typing import Optional
 
 from fastapi import UploadFile, HTTPException
@@ -34,8 +35,9 @@ def _detect_image_type(header: bytes) -> str | None:
     return None
 
 
-def save_upload_file(file: Optional[UploadFile]) -> str | None:
+def save_upload_file(file: Optional[UploadFile], upload_dir: Path | None = None) -> str | None:
     """Ověří a uloží nahraný obrázek na disk a vrátí relativní cestu k němu."""
+    upload_dir = upload_dir or settings.UPLOAD_DIR
     if not file:
         return None
 
@@ -58,9 +60,9 @@ def save_upload_file(file: Optional[UploadFile]) -> str | None:
             detail="Obsah souboru neodpovídá obrázku daného formátu."
         )
 
-    settings.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    upload_dir.mkdir(parents=True, exist_ok=True)
 
-    file_path = settings.UPLOAD_DIR / f"{uuid.uuid4().hex}{extension}"
+    file_path = upload_dir / f"{uuid.uuid4().hex}{extension}"
 
     written = 0
     try:

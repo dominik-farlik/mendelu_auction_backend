@@ -5,13 +5,21 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from dependencies import RoleChecker, ensure_group_access
-from models import Group
+from models import Group, Organization
 from models.group import GroupResponse, GroupCreate, GroupUpdate, AddMember
 from models.role import RoleEnum
 from routers.auth import get_current_user
 from models.user import User
 
 router = APIRouter(prefix="/groups", tags=["Groups"])
+
+
+def ensure_organization_exists(db: Session, organization_id: int | None) -> None:
+    if organization_id is not None and not db.get(Organization, organization_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Organizace s ID {organization_id} neexistuje."
+        )
 
 allow_only_manager = RoleChecker([RoleEnum.MANAGER])
 allow_editor_or_manager = RoleChecker([RoleEnum.EDITOR, RoleEnum.MANAGER])
@@ -64,9 +72,11 @@ async def create_group(
             detail="Skupina s tímto názvem již existuje"
         )
 
+    ensure_organization_exists(db, group_data.organization_id)
+
     new_group = Group(
         name=group_data.name,
-        organization=group_data.organization,
+        organization_id=group_data.organization_id,
         manager_id=current_user.id
     )
 
@@ -78,7 +88,7 @@ async def create_group(
     return new_group
 
 
-@router.put("/{group_id}", response_model=GroupResponse, dependencies=[Depends(allow_only_manager)])
+@router.patch("/{group_id}", response_model=GroupResponse, dependencies=[Depends(allow_only_manager)])
 async def update_group(
         group_id: int,
         group_data: GroupUpdate,
@@ -92,7 +102,9 @@ async def update_group(
             detail="Skupina nenalezena"
         )
 
-    update_data = group_data.model_dump(exclude_unset=True, exclude={"id"})
+    update_data = group_data.model_dump(exclude_unset=True)
+    if update_data.get("name") is None:
+        update_data.pop("name", None)
 
     new_name = update_data.get("name")
     if new_name and new_name != group.name:
@@ -101,6 +113,9 @@ async def update_group(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Skupina s tímto názvem již existuje"
             )
+
+    if "organization_id" in update_data:
+        ensure_organization_exists(db, update_data["organization_id"])
 
     new_manager_id = update_data.get("manager_id")
     if new_manager_id is not None:

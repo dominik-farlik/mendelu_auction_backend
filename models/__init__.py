@@ -1,5 +1,6 @@
 from .base import Base
 
+from .organization import Organization
 from .group import Group
 from .user import User
 from .product import Product

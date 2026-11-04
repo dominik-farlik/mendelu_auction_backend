@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from routers import auth, users, groups, products, ws, orders
+from routers import auth, users, groups, products, ws, orders, organizations
 from utils.auction_end_checker import auction_ender_task
 from utils.order_payment_checker import unpaid_order_checker_task
 
@@ -61,6 +61,7 @@ master_router = APIRouter(prefix="/api")
 master_router.include_router(auth.router)
 master_router.include_router(users.router)
 master_router.include_router(groups.router)
+master_router.include_router(organizations.router)
 master_router.include_router(products.router)
 master_router.include_router(orders.router)
 

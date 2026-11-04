@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     PASSWORD_ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     UPLOAD_DIR: Path
+    ORGANIZATION_UPLOAD_DIR: Path = Path("static/uploads/organizations")
 
     ADMIN_EMAIL: str
     ADMIN_PASSWORD: str

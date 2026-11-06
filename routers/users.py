@@ -10,7 +10,7 @@ from models import User, Product, Bid, Watchlist, Order
 from models.order import OrderStatus
 from models.product import ProductResponse, ProductWinResponse
 from models.role import RoleEnum, Role, RoleUpdate
-from models.user import UserResponse, UserUpdate, PublicUserResponse, UserPublicProfileResponse
+from models.user import UserResponse, UserUpdate, UserPublicProfileResponse
 from routers.auth import get_current_user
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -43,20 +43,13 @@ async def update_my_profile(
     return current_user
 
 
-@router.get("/{user_id}", response_model=PublicUserResponse)
+@router.get("/{user_id}", response_model=UserResponse, dependencies=[Depends(allow_only_manager)])
 async def read_user(
         user_id: int,
         db: Session = Depends(get_db)
 ):
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Uživatel nebyl nalezen"
-        )
-
-    return user
+    """Vrátí kompletní údaje uživatele pro správu (pouze manažer). Veřejná data jsou na /{user_id}/public."""
+    return get_user_or_404(db, user_id)
 
 
 def get_user_or_404(db: Session, user_id: int) -> User:

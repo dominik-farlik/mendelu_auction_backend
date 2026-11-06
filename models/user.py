@@ -66,7 +66,7 @@ class UserResponse(UserBase):
 
 class UserCreate(UserBase):
     email: str
-    phone_number: str | None
+    phone_number: str | None = None
     password: str
     username: str | None = None
 

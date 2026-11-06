@@ -11,13 +11,13 @@ from jwt.exceptions import InvalidTokenError
 from sqlalchemy.orm import Session
 from pwdlib import PasswordHash
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from starlette.responses import RedirectResponse
 
 import config
 from config import get_settings
 from database import get_db
 from models import User
-from models.user import UserResponse, UserCreate, PasswordResetRequest, PasswordResetConfirm
+from models.user import UserResponse, UserCreate, PasswordResetRequest, PasswordResetConfirm, \
+    EmailVerificationConfirm, EmailVerificationResend
 from utils.email_actions import create_verification_token, send_verification_email, send_password_reset_email
 from utils.rate_limit import rate_limit, rate_limit_key
 
@@ -173,22 +173,33 @@ async def register(
     db.commit()
     db.refresh(new_user)
 
-    token = create_verification_token(new_user.email, settings)
-    verification_link = f"{settings.BACKEND_URL}/api/auth/verify-email?token={token}"
-
-    background_tasks.add_task(send_verification_email, new_user.email, verification_link)
+    queue_verification_email(background_tasks, new_user.email, settings)
 
     return new_user
 
 
-@router.get("/verify-email")
+def queue_verification_email(background_tasks: BackgroundTasks, email: str, settings: config.Settings) -> None:
+    """Naplánuje odeslání e-mailu s odkazem na ověřovací stránku frontendu."""
+    token = create_verification_token(email, settings)
+    verification_link = f"{settings.FRONTEND_URL}/overit-email?token={token}"
+    background_tasks.add_task(send_verification_email, email, verification_link)
+
+
+@router.post(
+    "/verify-email",
+    dependencies=[Depends(rate_limit("verify-email", limit=20, window_seconds=10 * 60))],
+)
 async def verify_email(
-        token: str,
+        request: EmailVerificationConfirm,
         db: Session = Depends(get_db),
         settings: config.Settings = Depends(get_settings)
 ):
+    """
+    Ověří e-mail podle tokenu z odkazu. Volá ho frontendová stránka /overit-email přes POST,
+    takže odkaz v e-mailu neověří účet už při jeho automatické kontrole poštovním klientem.
+    """
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.PASSWORD_ALGORITHM])
+        payload = jwt.decode(request.token, settings.SECRET_KEY, algorithms=[settings.PASSWORD_ALGORITHM])
 
         if payload.get("type") != "email_verification":
             raise InvalidTokenError()
@@ -205,12 +216,32 @@ async def verify_email(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Uživatel nenalezen.")
 
     if user.is_verified:
-        return {"message": "Tento e-mail už byl dříve ověřen."}
+        return {"message": "Tento e-mail už byl dříve ověřen. Můžete se přihlásit.", "already_verified": True}
 
     user.is_verified = True
     db.commit()
 
-    return RedirectResponse(url=f"{settings.FRONTEND_URL}/login?verified=true")
+    return {"message": "Váš e-mail byl úspěšně ověřen. Nyní se můžete přihlásit.", "already_verified": False}
+
+
+@router.post(
+    "/resend-verification",
+    dependencies=[Depends(rate_limit("resend-verification", limit=5, window_seconds=10 * 60))],
+)
+async def resend_verification(
+        request: EmailVerificationResend,
+        background_tasks: BackgroundTasks,
+        db: Session = Depends(get_db),
+        settings: config.Settings = Depends(get_settings)
+):
+    """Znovu pošle ověřovací e-mail. Odpověď neprozrazuje, zda účet existuje."""
+    rate_limit_key("resend-verification", request.email, limit=3, window_seconds=60 * 60)
+
+    user = get_user(db, request.email)
+    if user and not user.is_verified:
+        queue_verification_email(background_tasks, user.email, settings)
+
+    return {"message": "Pokud k tomuto e-mailu existuje neověřený účet, poslali jsme na něj nový ověřovací odkaz."}
 
 
 @router.get("/me/", response_model=UserResponse)

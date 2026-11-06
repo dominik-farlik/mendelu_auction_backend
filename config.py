@@ -21,7 +21,6 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str
     FRONTEND_URL: str
-    BACKEND_URL: str
 
     MAIL_USERNAME: str
     MAIL_PASSWORD: str
@@ -33,7 +32,7 @@ class Settings(BaseSettings):
 
     TRANSPARENT_ACCOUNT: str = "Zatím nezadáno"
 
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @field_validator("SECRET_KEY")
     @classmethod

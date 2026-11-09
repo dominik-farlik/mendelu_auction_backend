@@ -1,6 +1,6 @@
 from typing import Annotated, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from starlette import status
 
@@ -13,6 +13,7 @@ from models.product import OrderDetailResponse, ProductResponse, Product, Status
 from models.role import RoleEnum
 from routers.auth import get_current_user
 from utils.order_payment_checker import process_next_bidder
+from utils.email_actions import send_payment_reported_email
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -96,6 +97,7 @@ async def get_orders_by_group(
 async def confirm_order(
         order_id: int,
         request: ConfirmOrderRequest,
+        background_tasks: BackgroundTasks,
         current_user: Annotated[User, Depends(get_current_user)],
         db: Session = Depends(get_db)
 ):
@@ -117,6 +119,27 @@ async def confirm_order(
     order.shipping_address = request.shipping_address if request.delivery_method == "shipping" else None
 
     db.commit()
+
+    # Upozornění členům skupiny, ať platbu ověří na transparentním účtu (stejný VS jako na stránce platby).
+    product = order.product
+    recipients = [member.email for member in product.group.members]
+    if recipients:
+        delivery_text = (
+            f"Zaslat na adresu: {order.shipping_address}"
+            if order.delivery_method == DeliveryMethod.DELIVERY
+            else "Fyzické převzetí u školy"
+        )
+        background_tasks.add_task(
+            send_payment_reported_email,
+            recipients=recipients,
+            product_title=product.title,
+            amount=order.amount,
+            variable_symbol=str(product.id),
+            buyer_name=f"{current_user.first_name} {current_user.last_name}",
+            buyer_email=current_user.email,
+            delivery_text=delivery_text,
+            group_link=f"{get_settings().FRONTEND_URL}/skupina/{product.group_id}",
+        )
 
     return {"message": "Objednávka byla potvrzena a čeká na zpracování platby."}
 

@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone, timedelta
 
 import jwt
@@ -7,6 +8,7 @@ import config
 from config import get_settings
 
 settings = config.get_settings()
+logger = logging.getLogger(__name__)
 
 connection_config = ConnectionConfig(
         MAIL_USERNAME=settings.MAIL_USERNAME,
@@ -100,3 +102,52 @@ async def send_runner_up_email(email: str, product_title: str, price: float, exp
     )
     fm = FastMail(connection_config)
     await fm.send_message(message)
+
+def format_czk(amount: float) -> str:
+    """1234.0 -> '1 234 Kč', 400.5 -> '400,50 Kč' (desetinná místa jen když nějaká jsou)."""
+    text = f"{amount:,.0f}" if float(amount).is_integer() else f"{amount:,.2f}"
+    return f"{text.replace(',', ' ').replace('.', ',')} Kč"
+
+
+async def send_payment_reported_email(
+        recipients: list[str],
+        product_title: str,
+        amount: float,
+        variable_symbol: str,
+        buyer_name: str,
+        buyer_email: str,
+        delivery_text: str,
+        group_link: str,
+):
+    """
+    Upozorní členy skupiny, že výherce potvrdil platbu a zvolil způsob převzetí.
+    Volá se na pozadí, chyba odeslání proto jen zaloguje a potvrzení objednávky neshodí.
+    """
+    body = f"""
+    Dobrý den,
+
+    výherce aukce '{product_title}' právě potvrdil, že zaplatil, a zvolil způsob převzetí.
+    Platba by tedy měla být na cestě. Ověřte ji prosím na transparentním účtu podle těchto údajů:
+
+    Variabilní symbol: {variable_symbol}
+    Částka: {format_czk(amount)}
+
+    Výherce: {buyer_name} ({buyer_email})
+    Způsob převzetí: {delivery_text}
+
+    Jakmile platbu na účtu najdete, potvrďte ji v detailu skupiny v sekci Ukončené nabídky tlačítkem „Potvrdit platbu“:
+    {group_link}
+    """
+    fm = FastMail(connection_config)
+    # Každému členovi zvlášť: neplatná adresa jednoho nezablokuje ostatní a členové nevidí cizí adresy.
+    for recipient in recipients:
+        try:
+            message = MessageSchema(
+                subject=f"Výherce pravděpodobně zaplatil: {product_title} (VS {variable_symbol})",
+                recipients=[recipient],
+                body=body,
+                subtype=MessageType.plain
+            )
+            await fm.send_message(message)
+        except Exception as e:
+            logger.error(f"Failed to send payment reported email for VS {variable_symbol} to {recipient}: {e}")

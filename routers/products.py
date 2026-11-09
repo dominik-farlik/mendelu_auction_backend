@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 from database import get_db
 from dependencies import RoleChecker, get_current_user_optional, ensure_group_access, is_editor_or_manager
 from models import ProductImage, Bid, Watchlist
-from models.bid import BidCreate
+from models.bid import BidCreate, MAX_BID_AMOUNT
 from models.product import Product, ProductResponse, ProductCreate, Status, ProductBid, ProductUpdateStatus, \
     ProductPriceUpdate
 from models.group import Group
@@ -434,6 +434,12 @@ async def bid(
         current_user: Annotated[User, Depends(get_current_user)],
         db: Session = Depends(get_db)
 ):
+    if bid_data.amount > MAX_BID_AMOUNT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Příhoz může být nejvýše {MAX_BID_AMOUNT:,} Kč.".replace(",", " ")
+        )
+
     product = db.query(Product).filter(Product.id == product_id).with_for_update().first()
 
     check_auction_existence(product)

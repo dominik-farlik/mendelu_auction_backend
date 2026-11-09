@@ -33,6 +33,6 @@ class Bid(Base):
 
 
 class BidCreate(BaseModel):
-    amount: float = Field(..., gt=0, le=MAX_BID_AMOUNT)
+    amount: float = Field(..., gt=0)
 
     model_config = ConfigDict(allow_inf_nan=False)

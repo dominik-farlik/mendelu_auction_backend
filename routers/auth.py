@@ -1,7 +1,7 @@
 from datetime import datetime, timezone, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, Cookie, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, Cookie, BackgroundTasks
 
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -100,6 +100,7 @@ async def get_current_user(
 
 @router.post("/login", dependencies=[Depends(rate_limit("login", limit=20, window_seconds=60))])
 async def login(
+        request: Request,
         response: Response,
         form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
         db: Session = Depends(get_db),
@@ -131,7 +132,7 @@ async def login(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=False,
+        secure=request.url.scheme == "https",
         samesite="lax",
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
@@ -250,8 +251,8 @@ async def read_users_me(current_user: Annotated[User, Depends(get_current_user)]
 
 
 @router.post("/logout")
-async def logout(response: Response):
-    response.delete_cookie(key="access_token")
+async def logout(request: Request, response: Response):
+    response.delete_cookie(key="access_token", httponly=True, secure=request.url.scheme == "https", samesite="lax")
     return {"message": "Logged out successfully"}
 
 

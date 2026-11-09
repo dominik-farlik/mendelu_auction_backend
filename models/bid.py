@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from models.user import User
     from models.product import Product
 
-MAX_BID_AMOUNT = 100_000_000
+MAX_BID_AMOUNT = 1_000_000
 
 
 class Bid(Base):

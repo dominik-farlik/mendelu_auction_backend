@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from config import get_settings
 from database import get_db
-from dependencies import RoleChecker, get_current_user_optional
+from dependencies import RoleChecker
 from models import Organization, Group, Product, Order, User
 from models.order import OrderStatus
 from models.organization import OrganizationResponse, OrganizationPublicResponse
@@ -18,6 +18,7 @@ from utils.save_file import save_upload_file, delete_files
 router = APIRouter(prefix="/organizations", tags=["Organizations"])
 
 allow_only_manager = RoleChecker([RoleEnum.MANAGER])
+allow_editor_or_manager = RoleChecker([RoleEnum.EDITOR, RoleEnum.MANAGER])
 
 
 def get_organization_or_404(db: Session, organization_id: int) -> Organization:
@@ -51,9 +52,16 @@ async def get_organization(organization_id: int, db: Session = Depends(get_db)):
     return get_organization_or_404(db, organization_id)
 
 
-@router.get("/{organization_id}/public", response_model=OrganizationPublicResponse)
+@router.get(
+    "/{organization_id}/public",
+    response_model=OrganizationPublicResponse,
+    dependencies=[Depends(allow_editor_or_manager)]
+)
 async def get_organization_public_profile(organization_id: int, db: Session = Depends(get_db)):
-    """Vrátí veřejný profil organizace včetně statistik aukcí."""
+    """
+    Vrátí profil organizace se statistikami aukcí jejích skupin (jen pro editory a manažery).
+    Výtěžek se dělí rovným dílem mezi všechny organizace, statistiky jsou tedy jen informativní.
+    """
     organization = get_organization_or_404(db, organization_id)
     now = datetime.now(UTC)
 
@@ -92,10 +100,10 @@ async def get_organization_public_profile(organization_id: int, db: Session = De
 @router.get("/{organization_id}/products", response_model=List[ProductResponse])
 async def get_organization_products(
         organization_id: int,
-        current_user: Annotated[User | None, Depends(get_current_user_optional)],
+        current_user: Annotated[User, Depends(allow_editor_or_manager)],
         db: Session = Depends(get_db),
 ):
-    """Vrátí právě probíhající schválené aukce, jejichž výtěžek obdrží organizace."""
+    """Vrátí právě probíhající schválené aukce skupin přiřazených k organizaci (jen pro editory a manažery)."""
     get_organization_or_404(db, organization_id)
     now = datetime.now(UTC)
 
@@ -112,7 +120,7 @@ async def get_organization_products(
     ).all()
 
     for product in products:
-        is_followed = bool(current_user) and any(
+        is_followed = any(
             follow.follower_id == current_user.id for follow in product.followers
         )
         setattr(product, "is_followed", is_followed)

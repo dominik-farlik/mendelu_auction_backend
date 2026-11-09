@@ -2,6 +2,7 @@ import json
 from datetime import datetime, UTC, timedelta
 from typing import List, Optional, Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Form, UploadFile, File, Query
+from pydantic import ValidationError
 from sqlalchemy import select, delete, desc, or_, and_
 from sqlalchemy.orm import Session, selectinload
 
@@ -29,6 +30,22 @@ allow_only_manager = RoleChecker([RoleEnum.MANAGER])
 allow_editor_or_manager = RoleChecker([RoleEnum.EDITOR, RoleEnum.MANAGER])
 
 PUBLIC_STATUSES = (Status.APPROVED.value, Status.FINISHED.value)
+
+
+def parse_product_data(product_data: str) -> ProductCreate:
+    """Načte ProductCreate z JSON pole formuláře a chyby validace vrátí jako čitelný text."""
+    try:
+        return ProductCreate(**json.loads(product_data))
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=" ".join(err["msg"].removeprefix("Value error, ") for err in exc.errors())
+        )
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Neplatný formát JSON dat v poli product_data."
+        )
 
 
 def ensure_product_visible(product: Product, user: User | None) -> None:
@@ -66,12 +83,7 @@ async def create_product(
     """
     Vytvoření nového produktu včetně nahrání hlavního obrázku a galerie.
     """
-    try:
-        product_in = ProductCreate(**json.loads(product_data))
-    except (ValueError, json.JSONDecodeError):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Neplatný formát JSON dat v poli product_data.")
+    product_in = parse_product_data(product_data)
 
     ensure_group_access(current_user, product_in.group_id)
 
@@ -138,13 +150,7 @@ async def update_product(
     ensure_group_access(current_user, product.group_id)
     ensure_product_editable(product, db)
 
-    try:
-        product_in = ProductCreate(**json.loads(product_data))
-    except (ValueError, json.JSONDecodeError):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Neplatný formát JSON dat v poli product_data."
-        )
+    product_in = parse_product_data(product_data)
 
     if product_in.group_id != product.group_id:
         ensure_group_access(current_user, product_in.group_id)

@@ -38,6 +38,9 @@ app = FastAPI(title="MENDELU Auction API", lifespan=lifespan)
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = [{key: value for key, value in error.items() if key != "input"} for error in exc.errors()]
+    for error in errors:
+        if isinstance(error.get("msg"), str):
+            error["msg"] = error["msg"].removeprefix("Value error, ")
     return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
 
 origins = [

@@ -73,22 +73,30 @@ class Product(Base):
     orders: Mapped[list["Order"]] = relationship("Order", back_populates="product", cascade="all, delete-orphan")
 
 
-MAX_PRICE = 100_000_000
+MAX_PRICE = 100_000
 
 
 class ProductBase(BaseModel):
     title: str = Field(..., max_length=100)
     description: Optional[str] = None
     category: Category = Category.OTHER
-    starting_price: Optional[float] = Field(None, gt=0, le=MAX_PRICE)
-    buy_now_price: Optional[float] = Field(None, gt=0, le=MAX_PRICE)
-    min_bid: Optional[float] = Field(None, gt=0, le=MAX_PRICE)
+    starting_price: Optional[float] = Field(None, gt=0)
+    buy_now_price: Optional[float] = Field(None, gt=0)
+    min_bid: Optional[float] = Field(None, gt=0)
     cover_image: Optional[str] = Field(None, max_length=255)
     big_preview: bool = False
     starts_at: Optional[datetime]
     ends_at: Optional[datetime]
 
     model_config = ConfigDict(from_attributes=True, allow_inf_nan=False)
+
+
+def validate_price_limits(**prices: float | None) -> None:
+    labels = {"starting_price": "Počáteční cena", "min_bid": "Minimální příhoz", "buy_now_price": "Cena Kup teď"}
+    limit = f"{MAX_PRICE:,}".replace(",", " ")
+    for name, value in prices.items():
+        if value is not None and value > MAX_PRICE:
+            raise ValueError(f"{labels[name]} může být nejvýše {limit} Kč.")
 
 
 def validate_prices(starting_price: float | None, buy_now_price: float | None) -> None:
@@ -118,6 +126,8 @@ class ProductCreate(ProductBase):
             self.ends_at = self.ends_at.replace(tzinfo=timezone.utc)
         if self.ends_at <= self.starts_at:
             raise ValueError("Konec aukce musí být po jejím začátku.")
+        validate_price_limits(starting_price=self.starting_price, min_bid=self.min_bid,
+                              buy_now_price=self.buy_now_price)
         validate_prices(self.starting_price, self.buy_now_price)
         return self
 
@@ -176,13 +186,15 @@ class OrderDetailResponse(BaseModel):
 
 
 class ProductPriceUpdate(BaseModel):
-    starting_price: float | None = Field(..., gt=0, le=MAX_PRICE)
-    min_bid: float | None = Field(..., gt=0, le=MAX_PRICE)
-    buy_now_price: float | None = Field(..., gt=0, le=MAX_PRICE)
+    starting_price: float | None = Field(..., gt=0)
+    min_bid: float | None = Field(..., gt=0)
+    buy_now_price: float | None = Field(..., gt=0)
 
     model_config = ConfigDict(allow_inf_nan=False)
 
     @model_validator(mode="after")
     def validate_auction_prices(self):
+        validate_price_limits(starting_price=self.starting_price, min_bid=self.min_bid,
+                              buy_now_price=self.buy_now_price)
         validate_prices(self.starting_price, self.buy_now_price)
         return self

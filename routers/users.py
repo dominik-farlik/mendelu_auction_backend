@@ -32,7 +32,6 @@ async def update_my_profile(
 ):
     """Upraví údaje aktuálně přihlášeného uživatele"""
     current_user.username = user_update.username
-    current_user.email = user_update.email
     current_user.phone_number = user_update.phone_number
     current_user.first_name = user_update.first_name
     current_user.last_name = user_update.last_name

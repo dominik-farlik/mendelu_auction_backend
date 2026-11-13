@@ -80,7 +80,8 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(UserBase):
-    email: str
+    # E-mail se úmyslně nedá měnit: je to přihlašovací údaj ověřený při registraci
+    # a váže se na něj přihlašovací token. Pokud ho klient pošle, ignoruje se.
     phone_number: str | None
     username: str | None = None
     public_last_name: bool
